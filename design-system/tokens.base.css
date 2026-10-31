@@ -1,0 +1,25 @@
+:root {
+  --font-ui: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-code: Consolas, "Courier New", monospace;
+  --font-small: .75rem;
+  --font-body: .875rem;
+  --font-label: .875rem;
+  --font-section: 1.125rem;
+  --font-title: 1.125rem;
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --radius-control: .25rem;
+  --radius-panel: .375rem;
+  --control-height: 2.75rem;
+  --operator-control-height: 3.25rem;
+  --focus-width: 3px;
+  --focus-offset: 3px;
+  --line-body: 1.4;
+  --line-heading: 1.18;
+  --layout-max: 86rem;
+}

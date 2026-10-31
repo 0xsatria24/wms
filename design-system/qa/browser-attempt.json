@@ -1,0 +1,23 @@
+{
+  "scope": "Browser verification attempt",
+  "status": "INCOMPLETE",
+  "last_attempt": {
+    "scope": "User-reference ERP design-system prototype",
+    "direction": "Supplied ERP screenshot with Ledger calm tone",
+    "checks": [],
+    "contrast": [],
+    "responsive": [],
+    "pageErrors": [],
+    "consoleErrors": [],
+    "networkRequests": [],
+    "productionUatRun": false,
+    "status": "FAIL",
+    "error": "page.goto: net::ERR_NETWORK_ACCESS_DENIED at http://127.0.0.1:8873/\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:8873/\", waiting until \"load\"\u001b[22m\n\n    at C:\\Users\\muham\\OneDrive\\Documents\\ChatGPT\\inventory management system\\design-system\\qa\\verify.cjs:21:16"
+  },
+  "additional_limits": [
+    "CSV download completion canceled in the earlier file-based run",
+    "Browser Use could not reach the loopback page",
+    "Browser Use rejected file protocol; no alternate browser route used after rejection"
+  ],
+  "temporary_server_stopped": true
+}

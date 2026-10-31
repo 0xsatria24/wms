@@ -1,0 +1,37 @@
+GENERATOR: built-in image_gen; no CLI fallback.
+
+INITIAL STOCK TREND REVISION
+Use case: ui-mockup. Create ONE revised desktop inventory screen, target 1440x1024, crisp flat straight-on readable app UI without any device frame, perspective or poster.
+Image 1 is the SELECTED design to continue, specifically its top Stock position screen: preserve its original white sidebar, cool pale gray workspace, soft white rounded12-16px surfaces, restrained separators, charcoal humanist sans14-16px, pale cyan selection and deep blue controls. Images2 and3 are original moodboard references only. Keep the selected Clear Operations direction, not a new variant. Original text-only Inventory / WMS brand, no copied logo, no truck, no finances. Match the selected concept's calm clear hierarchy. Dark BLUE text on pale cyan selected nav for contrast; no white on bright cyan.
+ONE screen only, main table LEFT with generous ~760px width, analysis panel RIGHT ~400px, sidebar180px. Let panels grow vertically naturally. No second receiving screen.
+All UI in English, except language names. Top context Demo Company / Main Warehouse, Simulation data pill, 29 Oct 2026.
+Sidebar Inventory selected; Receiving, Shipping, Transfers, Stock count, Tracking, Integrations. Bottom Settings and language control English (default), with a small visible LANGUAGE settings popover containing checked English and unchecked Bahasa Indonesia (santai). It must not obscure the table or analysis.
+Page title Stock position. Search placeholder Search items, SKU or location. Filter button.
+Table EXACT columns: Item | Location | Condition | Reserved for orders | Available | Unit. NO Physical, On hand or Total stock column or metric. Keep numbers right-aligned. Rows:
+Product A, SKU-A | A-01 | Good | 24 | 76 | units
+Product B, SKU-B | QC | Not good | 8 | 0 | units
+Product C, SKU-C | Staging | Good | 8 | 0 | units
+Product A selected with pale cyan row and visible left selection line. Condition badges readable dark text with pale background. Not good neutral amber. ProductB example means confirmed rejected condition, not merely waiting for inspection.
+Right panel content must be DISTINCT from table: title Product A, SKU-A, then Item trends. Scope Main Warehouse · All locations. Metric dropdown Shipped units. No repeated condition, location A01, reserved or available figures in panel.
+Analysis content:
+YTD shipped: 1,100 units; +10.0% vs same period 2025; 1 Jan–28 Oct 2026.
+A clear blue monthly line chart labelled Monthly shipped units, Jan to Oct. Values Jan80 Feb90 Mar100 Apr110 May100 Jun120 Jul110 Aug100 Sep120 Oct170. October point dashed and labelled Partial. Readable y-axis in units with zero baseline. Chart should accurately reflect this sequence; no decorative graph.
+Below chart two simple comparison rows (not nested cards):
+MoM +20.0% | Sep 2026:120 / Aug 2026:100
+YoY +25.0% | Sep 2026:120 / Sep 2025:96
+Small helper Last complete month: Sep 2026. Data through 28 Oct 2026.
+Footer in panel Confirmed shipments only. Quiet link View stock movements.
+The percentages are neutral blue, not success indicators, an increase in shipments is not inherently good. No fabricated revenue or AI insight. Under table helper Reserved for orders means units set aside for existing orders. Available excludes stock on hold. Visible Simulation data means all sample stock and trends are fictional.
+Make table headings wrap into at most2 lines and leave sufficient width for Reserved for orders. Typography crisp no clipped content. Avoid empty giant dashboard space; clean operational workspace. No explanatory poster outside UI.
+
+FOLLOW-UP: OPTIONAL IMAGE AND SPECIFICATIONS
+Use case: ui-mockup, precise UI revision. Image1 is the exact selected latest inventory design. Revise this same design, do NOT explore a new direction. One straight-on desktop Stock position screen, target1600x1200, original cool gray/white/cyan rounded Clear Operations design, readable body14-16, no device mockup.
+Preserve English default UI, original sidebar nav, Demo Company/Main Warehouse, Simulation data, date29Oct2026, main table on left and product details+analytics right. Preserve language selector in Settings showing English selected and Bahasa Indonesia (santai) second choice; use checkmark exclusive selection, not square checkboxes.
+Requested changes:
+1. In table Item column replace generic cube icons by soft neutral PHOTO placeholders, a simple picture-outline glyph in light gray40x40px. Each item has same-size placeholder then name andSKU, optional image not required. No new image column. Product A SKU-A selected. ProductB SKU-B and ProductC SKU-C unselected. No actual invented product photo. Placeholder is intentional because images optional.
+2. Right panel becomes Product details. Header includes larger64x64px PHOTO placeholder, Product A, SKU-A, a visible small action Add image, with text Optional image. Make this clearly a real optional upload affordance, not required validation. No filename input clutter or giant empty upload drop zone. Uploaded photo will replace placeholders conceptually; do not show a photo now.
+3. Directly BELOW product header add a compact expanded Specifications group with2-column label/value grid: Category General goods; Base unit units; Dimensions Not set; Unit weight Not set. These are example/unfilled metadata. No condition, reserved, available duplication in productdetails. Do not invent dimensions or weight.
+4. Below specs preserve Item trends. Metric Shipped units; scope Main Warehouse · All locations. YTD1,100units +10.0% vs same period2025, period1Jan–28Oct2026. Monthly linechart Jan80 Feb90 Mar100 Apr110 May100 Jun120 Jul110 Aug100 Sep120 Oct170. Dashed partial October endpoint with label Partial, zero baseline, units yaxis. Two compact rows MoM+20.0% (Sep2026:120 / Aug2026:100); YoY+25.0% (Sep2026:120 / Sep2025:96). Last complete month Sep2026. Confirmed shipments only. Keep all analytics legible below specifications; increase canvas height and simplify whitespace if needed. Can use a slightly wider ~460px right panel. Small source link View stock movements.
+Table EXACT headers Item | Location | Condition | Reserved for orders | Available | Unit. No Physical/On hand column. Rows ProductA SKU-A/A-01/Good/24/76/units; ProductB SKU-B/QC/Not good/8/0/units; ProductC SKU-C/Staging/Good/8/0/units. Search andFilter. No stockbalances in detailpanel. Selectednav pale cyan darkink. Cyanselectedrow. Amber Notgood badge. Deepblue primarycontrols. Clean table, professional and readable. At bottom table retain helper Reserved for orders means units set aside for existing orders. Available excludes stock on hold. Visible simulation label means all example figures are fictional.
+Do not redesign colors/navigation or add financial metrics, trucks, Vantus logo, AIinsights. No extra form fields or screenshots in this image. All changes ONLY product photo optional, specifications, and resulting necessary layout. Keep trends unchanged and accurate.
+

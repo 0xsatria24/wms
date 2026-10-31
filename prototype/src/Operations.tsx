@@ -1,0 +1,1545 @@
+import React, { useState } from "react";
+import { Barcode, ArrowRight, Plus } from "@phosphor-icons/react";
+import { MAIN, SECONDARY, available } from "./fixtures";
+import {
+  useText,
+  Button,
+  Field,
+  Notice,
+  Panel,
+  Tag,
+  Empty,
+  Summary,
+  Tabs,
+  DataTable,
+  Modal,
+} from "./ui.tsx";
+
+export function Operations(props) {
+  const {
+    route,
+    data,
+    setData,
+    warehouse,
+    user,
+    go,
+    ask,
+    flash,
+    draft: d,
+    patchDraft: patch,
+  } = props;
+  const t = useText();
+  const [newOrder, setNewOrder] = useState(false);
+  const [newQty, setNewQty] = useState("10");
+  const value = (key: string, fallback: any = "") => d[key] ?? fallback;
+  const select = (label, key, options, fallback) => (
+    <Field label={label}>
+      <select
+        value={value(key, fallback ?? options[0]?.[0] ?? "")}
+        onChange={(e) => patch({ [key]: e.target.value })}
+      >
+        {options.map(([v, label]) => (
+          <option key={v} value={v}>
+            {label}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+  const field = (
+    label: string,
+    key: string,
+    fallback: any = "",
+    extra = {},
+  ) => (
+    <Field
+      label={label}
+      value={value(key, fallback)}
+      onChange={(e) => patch({ [key]: e.target.value })}
+      {...extra}
+    />
+  );
+  const qtyField = (fallback, max = undefined) =>
+    field(
+      t("Actual quantity (units, required)", "Jumlah aktual (unit, wajib)"),
+      "qty",
+      String(fallback),
+      { type: "number", min: 1, max, step: 1, required: true },
+    );
+  const scanField = (sku) =>
+    field(
+      t(
+        "Scan item barcode / SKU (required)",
+        "Pindai barcode / SKU barang (wajib)",
+      ),
+      "scan",
+      "",
+      { required: true, placeholder: sku, autoComplete: "off" },
+    );
+  const scanLocation = (loc) =>
+    field(
+      t("Scan location (required)", "Pindai lokasi (wajib)"),
+      "locationScan",
+      "",
+      { required: true, placeholder: loc, autoComplete: "off" },
+    );
+  const reasonField = (required) =>
+    field(
+      t(
+        required ? "Reason (required)" : "Reason / notes",
+        required ? "Alasan (wajib)" : "Alasan / catatan",
+      ),
+      "reason",
+      "",
+      { required },
+    );
+  const form = (children, onSubmit, button, disabled = false) => (
+    <form
+      className="stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSubmit();
+      }}
+    >
+      {children}
+      <div className="form-actions">
+        <Button
+          onClick={() =>
+            flash(
+              t(
+                "Draft kept in this tab, tied to the current user and warehouse. Stock is unchanged.",
+                "Draf disimpan di tab ini, terikat pengguna dan gudang. Stok belum berubah.",
+              ),
+            )
+          }
+        >
+          {t("Keep draft", "Simpan draf")}
+        </Button>
+        <Button primary type="submit" disabled={disabled}>
+          {button || t("Review and confirm", "Tinjau dan konfirmasi")}
+        </Button>
+      </div>
+    </form>
+  );
+  const review = (type, payload, details) => ask(type, payload, details);
+  const quantityDetails = (q) => [
+    t("Actual", "Aktual"),
+    `${q} ${t("units", "unit")}`,
+  ];
+  const itemDetails = (sku) => [
+    t("Item", "Barang"),
+    `${data.products.find((p) => p.sku === sku)?.name} · ${sku}`,
+  ];
+  const scoped = (rows) => rows.filter((r) => r.warehouse === warehouse);
+  const queue = (items, selected, onSelect, title = undefined) => (
+    <aside className="task-queue panel">
+      <h2>{title || t("Work queue", "Antrean kerja")}</h2>
+      <div className="queue-selector">
+        <Field label={t("Selected task", "Tugas terpilih")}>
+          <select value={selected} onChange={(e) => onSelect(e.target.value)}>
+            {items.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.id} · {item.sku}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      <div className="queue-items">
+        {items.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={`queue-item ${selected === item.id ? "selected" : ""}`}
+            aria-pressed={selected === item.id}
+            onClick={() => onSelect(item.id)}
+          >
+            <strong>{item.id}</strong>
+            <span>{item.sku}</span>
+            <small>
+              {item.remaining != null
+                ? `${t("Remaining", "Sisa")}: ${item.remaining} ${t("units", "unit")}`
+                : item.status}
+            </small>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+  const history = (
+    <Panel title={t("Recorded actions", "Tindakan tercatat")}>
+      <DataTable
+        label={t("Action history", "Riwayat tindakan")}
+        empty={t(
+          "No confirmed actions in this workflow yet.",
+          "Belum ada tindakan terkonfirmasi pada alur ini.",
+        )}
+        columns={[
+          { key: "id", label: t("Transaction", "Transaksi") },
+          { key: "type", label: t("Action", "Tindakan") },
+          { key: "user", label: t("User", "Pengguna") },
+          {
+            key: "stamp",
+            label: t("Time", "Waktu"),
+            render: (r) => new Date(r.stamp).toLocaleString(),
+          },
+        ]}
+        rows={data.audit
+          .filter(
+            (a) =>
+              a.warehouse === warehouse &&
+              a.type ===
+                ({
+                  receiving: "receive",
+                  quality: "qc",
+                  shipping: "ship",
+                  picking: "pick",
+                  reservations: "reserve",
+                }[route] || route),
+          )
+          .slice(0, 8)}
+      />
+    </Panel>
+  );
+  const next = (route, en, id) => (
+    <a className="next-link" href={`#${route}`}>
+      {t(en, id)}
+      <ArrowRight size={17} aria-hidden="true" />
+    </a>
+  );
+  let content;
+  if (route === "receiving") {
+    const docs = scoped(data.receipts).map((r) => ({
+      ...r,
+      remaining: r.ordered - r.received,
+    }));
+    const doc = docs.find((r) => r.id === d.document) || docs[0];
+    const q = Number(value("qty", Math.min(60, doc?.remaining || 0)));
+    content = !doc ? (
+      <Panel>
+        <Empty
+          title={t(
+            "No purchase orders in this warehouse",
+            "Belum ada PO di gudang ini",
+          )}
+          action={next(
+            "transfers",
+            "View incoming transfers",
+            "Lihat transfer masuk",
+          )}
+        />
+      </Panel>
+    ) : (
+      <div className="workflow-grid">
+        {queue(
+          docs,
+          doc.id,
+          (id) => patch({ document: id, qty: undefined, scan: "" }),
+          t("Purchase orders", "Pesanan pembelian"),
+        )}
+        <Panel
+          title={doc.id}
+          action={
+            <Tag>
+              {doc.received
+                ? t("Partially received", "Diterima sebagian")
+                : t("Draft", "Draf")}
+            </Tag>
+          }
+        >
+          <Summary
+            items={[
+              [t("Item", "Barang"), doc.sku],
+              [t("Ordered", "Dipesan"), `${doc.ordered} ${t("units", "unit")}`],
+              [
+                t("Confirmed received", "Sudah diterima"),
+                `${doc.received} ${t("units", "unit")}`,
+              ],
+              [
+                t("Remaining before this draft", "Sisa sebelum draf ini"),
+                `${doc.remaining} ${t("units", "unit")}`,
+              ],
+            ]}
+          />
+          {doc.remaining ? (
+            form(
+              <>
+                <Notice>
+                  {t(
+                    "QC is required in this demo. Received items stay on hold until inspected.",
+                    "QC diwajibkan pada demo ini. Barang masuk ditahan sampai diperiksa.",
+                  )}
+                </Notice>
+                <h3>{t("Record actual receipt", "Catat penerimaan aktual")}</h3>
+                <div className="form-grid">
+                  {scanField(doc.sku)}
+                  {qtyField(Math.min(60, doc.remaining), doc.remaining)}
+                </div>
+                <Summary
+                  items={[
+                    [t("Destination", "Tujuan"), "Receiving"],
+                    [
+                      t("Draft actual", "Aktual draf"),
+                      `${q} ${t("units", "unit")}`,
+                    ],
+                    [
+                      t(
+                        "Remaining after confirmation",
+                        "Sisa setelah konfirmasi",
+                      ),
+                      `${Math.max(0, doc.remaining - q)} ${t("units", "unit")}`,
+                    ],
+                    [
+                      t("ERP status", "Status ERP"),
+                      t(
+                        "Not sent for this draft",
+                        "Belum dikirim untuk draf ini",
+                      ),
+                    ],
+                  ]}
+                />
+              </>,
+              () =>
+                review(
+                  "receive",
+                  { document: doc.id, scan: value("scan"), qty: q },
+                  [
+                    [t("Purchase order", "Pesanan pembelian"), doc.id],
+                    itemDetails(doc.sku),
+                    quantityDetails(q),
+                    [
+                      t("Remaining after receipt", "Sisa setelah diterima"),
+                      `${doc.remaining - q} ${t("units", "unit")}`,
+                    ],
+                    [
+                      t("Destination / hold", "Tujuan / penahanan"),
+                      "Receiving · QC",
+                    ],
+                  ],
+                ),
+              t("Review receipt", "Tinjau penerimaan"),
+            )
+          ) : (
+            <Notice kind="success">
+              {t(
+                "Purchase order received in full.",
+                "PO sudah diterima seluruhnya.",
+              )}
+            </Notice>
+          )}
+          {next(
+            "quality",
+            "Continue to quality inspection",
+            "Lanjut ke pemeriksaan kualitas",
+          )}
+        </Panel>
+      </div>
+    );
+  } else if (route === "quality") {
+    const tasks = scoped(data.inspections).filter((t) => t.remaining > 0);
+    const task = tasks.find((t) => t.id === d.task) || tasks[0];
+    const good = Number(value("good", Math.min(50, task?.remaining || 0)));
+    const bad = Number(
+      value("bad", Math.max(0, (task?.remaining || 0) - good)),
+    );
+    content = !task ? (
+      <Panel>
+        <Empty
+          title={t(
+            "No inspections waiting",
+            "Belum ada inspeksi yang menunggu",
+          )}
+          action={next("receiving", "Open receiving", "Buka penerimaan")}
+        />
+        {next("putaway", "View putaway tasks", "Lihat tugas penempatan")}
+      </Panel>
+    ) : (
+      <div className="workflow-grid">
+        {queue(tasks, task.id, (id) =>
+          patch({ task: id, good: undefined, bad: undefined }),
+        )}
+        <Panel title={task.id}>
+          <Summary
+            items={[
+              [t("Source", "Sumber"), task.source],
+              itemDetails(task.sku),
+              [
+                t("Quantity to inspect", "Jumlah pemeriksaan"),
+                `${task.remaining} ${t("units", "unit")}`,
+              ],
+              [t("Hold", "Penahanan"), t("Awaiting QC", "Menunggu QC")],
+            ]}
+          />
+          {user.role === "operator" && (
+            <Notice kind="warning">
+              {t(
+                "Switch to the admin demo user in Settings to record an inspection decision.",
+                "Ganti ke pengguna demo admin di Pengaturan untuk mencatat keputusan inspeksi.",
+              )}
+            </Notice>
+          )}
+          {form(
+            <>
+              <div className="form-grid">
+                {field(
+                  t("Good quantity (units)", "Jumlah bagus (unit)"),
+                  "good",
+                  Math.min(50, task.remaining),
+                  {
+                    type: "number",
+                    min: 0,
+                    max: task.remaining,
+                    required: true,
+                  },
+                )}
+                {field(
+                  t("Not good quantity (units)", "Jumlah tidak bagus (unit)"),
+                  "bad",
+                  Math.max(0, task.remaining - good),
+                  {
+                    type: "number",
+                    min: 0,
+                    max: task.remaining,
+                    required: true,
+                  },
+                )}
+              </div>
+              {reasonField(bad > 0)}
+              <Notice kind="warning">
+                {t(
+                  "Only inspected good stock proceeds to putaway. Not good stock stays on hold in QC.",
+                  "Hanya stok yang sudah dinyatakan bagus yang lanjut ke penempatan. Stok tidak bagus tetap ditahan di QC.",
+                )}
+              </Notice>
+            </>,
+            () =>
+              review(
+                "qc",
+                { task: task.id, good, bad, reason: value("reason") },
+                [
+                  itemDetails(task.sku),
+                  [t("Good", "Bagus"), `${good} ${t("units", "unit")}`],
+                  [
+                    t("Not good / held", "Tidak bagus / ditahan"),
+                    `${bad} ${t("units", "unit")}`,
+                  ],
+                ],
+              ),
+            t("Review inspection", "Tinjau pemeriksaan"),
+            user.role === "operator",
+          )}
+          {next("putaway", "Continue to putaway", "Lanjut ke penempatan")}
+        </Panel>
+      </div>
+    );
+  } else if (route === "putaway") {
+    const tasks = scoped(data.putaways).filter((t) => t.remaining > 0);
+    const task = tasks.find((t) => t.id === d.task) || tasks[0];
+    const destination = value("destination", "A-01");
+    const q = Number(value("qty", task?.remaining || 0));
+    content = !task ? (
+      <Panel>
+        <Empty
+          title={t("No putaway tasks ready", "Belum ada tugas penempatan siap")}
+          action={next(
+            "quality",
+            "Open quality inspection",
+            "Buka pemeriksaan kualitas",
+          )}
+        />
+      </Panel>
+    ) : (
+      <div className="workflow-grid">
+        {queue(tasks, task.id, (id) => patch({ task: id, qty: undefined }))}
+        <Panel title={task.id}>
+          <Summary
+            items={[
+              [t("Source", "Sumber"), task.source],
+              itemDetails(task.sku),
+              [t("From", "Dari"), "Receiving"],
+              [
+                t("Remaining", "Sisa"),
+                `${task.remaining} ${t("units", "unit")}`,
+              ],
+            ]}
+          />
+          {form(
+            <>
+              <div className="form-grid">
+                {select(
+                  t("Destination location", "Lokasi tujuan"),
+                  "destination",
+                  [
+                    ["A-01", "A-01"],
+                    ["A-02", "A-02"],
+                  ],
+                  "A-01",
+                )}
+                {scanLocation(destination)}
+                {scanField(task.sku)}
+                {qtyField(task.remaining, task.remaining)}
+              </div>
+              <Notice>
+                {t(
+                  "Selecting a location does not verify physical placement. Scan its location code.",
+                  "Memilih lokasi belum membuktikan penempatan fisik. Pindai kode lokasinya.",
+                )}
+              </Notice>
+            </>,
+            () =>
+              review(
+                "putaway",
+                {
+                  task: task.id,
+                  scan: value("scan"),
+                  qty: q,
+                  destination,
+                  locationScan: value("locationScan"),
+                },
+                [
+                  itemDetails(task.sku),
+                  [t("From / to", "Dari / ke"), `Receiving / ${destination}`],
+                  quantityDetails(q),
+                ],
+              ),
+            t("Review putaway", "Tinjau penempatan"),
+          )}
+          {next("stock", "View stock position", "Lihat posisi stok")}
+        </Panel>
+      </div>
+    );
+  } else if (["reservations", "picking", "shipping"].includes(route)) {
+    const orders = scoped(data.orders).filter(
+      (o) => o.status === "released" && !o.cancelled,
+    );
+    const preferred =
+      route === "reservations"
+        ? orders.find(
+            (o) =>
+              !Object.values(o.allocations as Record<string, number>).some(
+                Boolean,
+              ),
+          )
+        : orders[0];
+    const o = orders.find((o) => o.id === d.order) || preferred || orders[0];
+    const p = data.positions.find(
+      (p) =>
+        p.sku === o?.sku &&
+        p.warehouse === warehouse &&
+        p.location === "A-01" &&
+        p.condition === "good" &&
+        !p.hold,
+    );
+    const reserved = o
+      ? Object.values(o.allocations as Record<string, number>).reduce(
+          (a, b) => a + b,
+          0,
+        )
+      : 0;
+    const remaining = o ? o.qty - o.shipped : 0;
+    const max =
+      route === "reservations"
+        ? remaining - reserved
+        : route === "picking"
+          ? o?.allocations["A-01"] || 0
+          : o?.allocations.Staging || 0;
+    const q = Number(
+      value("qty", route === "picking" ? Math.min(20, max) : max),
+    );
+    const ready =
+      route !== "shipping" || data.partialAllowed || q === remaining;
+    content = !o ? (
+      <Panel>
+        <Empty
+          title={t(
+            "No released orders in this warehouse",
+            "Belum ada order yang dilepas di gudang ini",
+          )}
+          action={next(
+            "orders",
+            "Open orders and approvals",
+            "Buka order dan persetujuan",
+          )}
+        />
+      </Panel>
+    ) : (
+      <div className="workflow-grid">
+        {queue(
+          orders.map((o) => ({ ...o, remaining: o.qty - o.shipped })),
+          o.id,
+          (id) =>
+            patch({
+              order: id,
+              qty: undefined,
+              scan: "",
+              locationScan: "",
+              packed: false,
+            }),
+        )}
+        <Panel title={o.id} action={<Tag>{t("Released", "Dilepas")}</Tag>}>
+          <Summary
+            items={[
+              [t("Item", "Barang"), o.sku],
+              [
+                t("Order quantity", "Jumlah order"),
+                `${o.qty} ${t("units", "unit")}`,
+              ],
+              [
+                t("Reserved for orders", "Dipesan"),
+                `${reserved} ${t("units", "unit")}`,
+              ],
+              [t("Picked", "Diambil"), `${o.picked} ${t("units", "unit")}`],
+              [t("Shipped", "Terkirim"), `${o.shipped} ${t("units", "unit")}`],
+              [
+                t("Open order quantity", "Sisa order"),
+                `${remaining} ${t("units", "unit")}`,
+              ],
+            ]}
+          />
+          {max <= 0 ? (
+            <Empty
+              title={
+                route === "reservations"
+                  ? t(
+                      "Order is fully allocated",
+                      "Order sudah dialokasikan seluruhnya",
+                    )
+                  : route === "picking"
+                    ? t(
+                        "No reserved stock ready to pick",
+                        "Belum ada stok dipesan yang siap diambil",
+                      )
+                    : t(
+                        "No picked stock ready to ship",
+                        "Belum ada stok diambil yang siap dikirim",
+                      )
+              }
+              action={next(
+                route === "shipping"
+                  ? "picking"
+                  : route === "picking"
+                    ? "reservations"
+                    : "picking",
+                route === "shipping"
+                  ? "Open picking"
+                  : route === "picking"
+                    ? "Open reservations"
+                    : "Open picking",
+                route === "shipping"
+                  ? "Buka pengambilan"
+                  : route === "picking"
+                    ? "Buka reservasi"
+                    : "Buka pengambilan",
+              )}
+            />
+          ) : (
+            form(
+              <>
+                {route === "reservations" ? (
+                  <>
+                    <Summary
+                      items={[
+                        [t("Location", "Lokasi"), "A-01"],
+                        [
+                          t("Available", "Tersedia"),
+                          `${p ? available(p) : 0} ${t("units", "unit")}`,
+                        ],
+                        [
+                          t("After reservation", "Setelah reservasi"),
+                          `${Math.max(0, (p ? available(p) : 0) - q)} ${t("units", "unit")}`,
+                        ],
+                      ]}
+                    />
+                    {q > (p ? available(p) : 0) && (
+                      <Notice kind="warning">
+                        {t(
+                          "Cannot reserve the full quantity. Review the shortage; partial allocation is not automatic.",
+                          "Jumlah penuh belum bisa dipesan. Tinjau kekurangannya; alokasi parsial tidak otomatis.",
+                        )}
+                      </Notice>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="form-grid">
+                      {scanField(o.sku)}
+                      {route === "picking" && scanLocation("A-01")}
+                    </div>
+                    <Notice>
+                      {route === "picking"
+                        ? t(
+                            "Actual moves to Staging. Warehouse stock has not departed.",
+                            "Aktual berpindah ke Staging. Barang belum keluar dari gudang.",
+                          )
+                        : t(
+                            "Confirming records physical departure. ERP synchronization is a separate result.",
+                            "Konfirmasi mencatat barang keluar secara fisik. Sinkronisasi ERP memiliki hasil terpisah.",
+                          )}
+                    </Notice>
+                  </>
+                )}
+                {qtyField(route === "picking" ? Math.min(20, max) : max, max)}
+                {route === "picking" && reasonField(q < max)}
+                {route === "shipping" && (
+                  <>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        required
+                        checked={!!d.packed}
+                        onChange={(e) => patch({ packed: e.target.checked })}
+                      />
+                      {t(
+                        "I have verified the packed item and quantity.",
+                        "Saya sudah mencocokkan barang dan jumlah dalam paket.",
+                      )}
+                    </label>
+                    {!ready && (
+                      <Notice kind="warning">
+                        {t(
+                          "Partial shipment policy is not configured. Pick the remaining units or review the demo policy in Settings.",
+                          "Aturan kirim parsial belum diatur. Ambil sisa unit atau tinjau kebijakan demo di Pengaturan.",
+                        )}
+                      </Notice>
+                    )}
+                  </>
+                )}
+              </>,
+              () =>
+                review(
+                  {
+                    reservations: "reserve",
+                    picking: "pick",
+                    shipping: "ship",
+                  }[route],
+                  {
+                    order: o.id,
+                    location: "A-01",
+                    scan: value("scan"),
+                    locationScan: value("locationScan"),
+                    qty: q,
+                    reason: value("reason"),
+                    packingVerified:
+                      route === "shipping" ? !!d.packed : undefined,
+                  },
+                  [
+                    [t("Order", "Order"), o.id],
+                    itemDetails(o.sku),
+                    quantityDetails(q),
+                    [
+                      t("Effect", "Dampak"),
+                      route === "reservations"
+                        ? t(
+                            "Reserve only; physical stock unchanged",
+                            "Hanya dipesan; stok fisik tetap",
+                          )
+                        : route === "picking"
+                          ? t(
+                              "A-01 to Staging; reservation follows",
+                              "A-01 ke Staging; reservasi ikut",
+                            )
+                          : t(
+                              "Stock departs; related reservation fulfilled",
+                              "Stok keluar; reservasi terkait terpenuhi",
+                            ),
+                    ],
+                  ],
+                ),
+              t("Review", "Tinjau"),
+              !ready,
+            )
+          )}
+          <div className="next-actions">
+            {next("orders", "View order", "Lihat order")}
+            {next(
+              route === "reservations"
+                ? "picking"
+                : route === "picking"
+                  ? "shipping"
+                  : "movements",
+              route === "reservations"
+                ? "Continue to picking"
+                : route === "picking"
+                  ? "Continue to packing"
+                  : "View stock movements",
+              route === "reservations"
+                ? "Lanjut ke pengambilan"
+                : route === "picking"
+                  ? "Lanjut ke packing"
+                  : "Lihat kartu stok",
+            )}
+          </div>
+        </Panel>
+      </div>
+    );
+  } else if (route === "orders") {
+    const orders = scoped(data.orders);
+    const o =
+      orders.find((o) => o.id === d.order) ||
+      orders.find((o) => o.status === "pending-approval") ||
+      orders[0];
+    content = (
+      <>
+        <div className="section-actions">
+          <Button primary onClick={() => setNewOrder(true)}>
+            <Plus size={18} />
+            {t("New order", "Order baru")}
+          </Button>
+        </div>
+        <div className="workflow-grid">
+          {queue(orders, o?.id, (id) => patch({ order: id }))}
+          <Panel title={o?.id || t("Order details", "Detail order")}>
+            {!o ? (
+              <Empty title={t("No orders yet", "Belum ada order")} />
+            ) : (
+              <>
+                <Summary
+                  items={[
+                    [t("Item", "Barang"), o.sku],
+                    [
+                      t("Requested", "Diminta"),
+                      `${o.qty} ${t("units", "unit")}`,
+                    ],
+                    [t("Status", "Status"), o.status],
+                    [t("Created by", "Dibuat oleh"), o.creator],
+                    [
+                      t("Allocated", "Dialokasikan"),
+                      Object.values(
+                        o.allocations as Record<string, number>,
+                      ).reduce((a, b) => a + b, 0),
+                    ],
+                    [
+                      t(
+                        "Picked / shipped / remaining",
+                        "Diambil / terkirim / sisa",
+                      ),
+                      `${o.picked} / ${o.shipped} / ${o.qty - o.shipped} ${t("units", "unit")}`,
+                    ],
+                  ]}
+                />
+                {o.status === "draft" ? (
+                  <Button
+                    primary
+                    onClick={() => {
+                      setData((s) => ({
+                        ...s,
+                        orders: s.orders.map((r) =>
+                          r.id === o.id
+                            ? { ...r, status: "pending-approval" }
+                            : r,
+                        ),
+                      }));
+                      flash(
+                        t(
+                          "Order submitted for approval. Stock is unchanged.",
+                          "Order diajukan untuk persetujuan. Stok tetap.",
+                        ),
+                      );
+                    }}
+                  >
+                    {t("Submit for approval", "Ajukan persetujuan")}
+                  </Button>
+                ) : ["pending-approval", "approved"].includes(o.status) ? (
+                  <div className="stack">
+                    <Notice>
+                      {t(
+                        "Approval and release are separate demonstration steps. Neither reserves stock.",
+                        "Persetujuan dan pelepasan adalah langkah demo terpisah. Keduanya belum memesan stok.",
+                      )}
+                    </Notice>
+                    {reasonField(o.status === "pending-approval")}
+                    <div className="form-actions">
+                      {o.status === "pending-approval" && (
+                        <Button
+                          danger
+                          disabled={
+                            user.role === "operator" || o.creator === user.id
+                          }
+                          onClick={() =>
+                            review(
+                              "reject-order",
+                              { order: o.id, reason: value("reason") },
+                              [
+                                [t("Order", "Order"), o.id],
+                                [t("Reason", "Alasan"), value("reason")],
+                              ],
+                            )
+                          }
+                        >
+                          {t("Return for review", "Kembalikan untuk ditinjau")}
+                        </Button>
+                      )}
+                      <Button
+                        primary
+                        disabled={
+                          user.role === "operator" ||
+                          (o.status === "pending-approval" &&
+                            o.creator === user.id)
+                        }
+                        onClick={() =>
+                          review(
+                            o.status === "approved"
+                              ? "release-order"
+                              : "approve-order",
+                            { order: o.id },
+                            [
+                              [t("Order", "Order"), o.id],
+                              [
+                                t("Action", "Tindakan"),
+                                o.status === "approved"
+                                  ? t(
+                                      "Release; no stock effect",
+                                      "Lepas; belum mengubah stok",
+                                    )
+                                  : t(
+                                      "Approve; no stock effect",
+                                      "Setujui; belum mengubah stok",
+                                    ),
+                              ],
+                            ],
+                          )
+                        }
+                      >
+                        {o.status === "approved"
+                          ? t("Release order", "Lepas order")
+                          : t("Approve order", "Setujui order")}
+                      </Button>
+                    </div>
+                    {user.role === "operator" && (
+                      <small>
+                        {t(
+                          "Use an authorized reviewer demo account in Settings.",
+                          "Gunakan akun demo peninjau yang berwenang di Pengaturan.",
+                        )}
+                      </small>
+                    )}
+                  </div>
+                ) : (
+                  next("reservations", "Open reservations", "Buka reservasi")
+                )}
+              </>
+            )}
+          </Panel>
+        </div>
+        {newOrder && (
+          <Modal
+            title={t("New order draft", "Draf order baru")}
+            onClose={() => setNewOrder(false)}
+          >
+            <form
+              className="stack"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const id = `SO-SIM-${1004 + data.orders.length - 3}`;
+                setData((s) => ({
+                  ...s,
+                  orders: [
+                    ...s.orders,
+                    {
+                      id,
+                      sku: "SKU-A",
+                      qty: Number(newQty),
+                      status: "draft",
+                      creator: user.id,
+                      warehouse,
+                      picked: 0,
+                      shipped: 0,
+                      returned: 0,
+                      allocations: {},
+                      cancelled: false,
+                    },
+                  ],
+                }));
+                patch({ order: id });
+                setNewOrder(false);
+              }}
+            >
+              <Summary items={[[t("Item", "Barang"), "Product A · SKU-A"]]} />
+              <Field
+                label={t("Quantity (units)", "Jumlah (unit)")}
+                type="number"
+                min="1"
+                step="1"
+                required
+                value={newQty}
+                onChange={(e) => setNewQty(e.target.value)}
+              />
+              <Button primary type="submit">
+                {t("Create draft", "Buat draf")}
+              </Button>
+            </form>
+          </Modal>
+        )}
+      </>
+    );
+  } else if (route === "cancellation") {
+    const mode = value("mode", "cancel");
+    const orders = scoped(data.orders).filter((o) => !o.cancelled);
+    const o = orders.find((o) => o.id === d.order) || orders[0];
+    const tasks = scoped(data.returnTasks).filter((r) => r.remaining > 0);
+    const task = tasks.find((r) => r.id === d.task) || tasks[0];
+    const q = Number(value("qty", task?.remaining || 0));
+    const destination = value("destination", "A-01");
+    content = (
+      <Panel
+        title={t(
+          "Cancellation and return to stock",
+          "Pembatalan dan kembali stok",
+        )}
+      >
+        <Tabs
+          label={t("Cancellation steps", "Langkah pembatalan")}
+          items={[
+            ["cancel", t("Cancel order", "Batalkan order")],
+            ["return", t("Return tasks", "Tugas pengembalian")],
+          ]}
+          value={mode}
+          onChange={(m) => patch({ mode: m })}
+        />
+        {mode === "cancel" ? (
+          o ? (
+            <>
+              {select(
+                t("Order", "Order"),
+                "order",
+                orders.map((o) => [o.id, o.id]),
+                o.id,
+              )}
+              <Summary
+                items={[
+                  [
+                    t("Unpicked reservation", "Reservasi belum diambil"),
+                    Object.entries(o.allocations as Record<string, number>)
+                      .filter(([l]) => l !== "Staging")
+                      .reduce((n, [, q]) => n + q, 0),
+                  ],
+                  [
+                    t("Picked in staging", "Sudah diambil ke staging"),
+                    o.allocations.Staging || 0,
+                  ],
+                  [t("Already shipped", "Sudah terkirim"), o.shipped],
+                ]}
+              />
+              {form(
+                <>
+                  {reasonField(true)}
+                  <Notice kind="warning">
+                    {t(
+                      "Picked items remain reserved until a physical return is confirmed. Shipped items follow the returns process.",
+                      "Barang yang diambil tetap dipesan sampai pengembalian fisik dikonfirmasi. Barang terkirim mengikuti proses retur.",
+                    )}
+                  </Notice>
+                </>,
+                () =>
+                  review("cancel", { order: o.id, reason: value("reason") }, [
+                    [t("Order", "Order"), o.id],
+                    [t("Reason", "Alasan"), value("reason")],
+                    [
+                      t("Staging kept reserved", "Staging tetap dipesan"),
+                      o.allocations.Staging || 0,
+                    ],
+                  ]),
+                t("Review cancellation", "Tinjau pembatalan"),
+                user.role === "operator",
+              )}
+            </>
+          ) : (
+            <Empty
+              title={t(
+                "No cancellable orders",
+                "Tidak ada order yang bisa dibatalkan",
+              )}
+            />
+          )
+        ) : task ? (
+          <>
+            {select(
+              t("Return task", "Tugas pengembalian"),
+              "task",
+              tasks.map((t) => [t.id, t.id]),
+              task.id,
+            )}
+            <Summary
+              items={[
+                [t("Order", "Order"), task.order],
+                [t("From", "Dari"), "Staging"],
+                [t("Remaining to return", "Sisa kembali"), task.remaining],
+              ]}
+            />
+            {form(
+              <div className="form-grid">
+                {scanField(task.sku)}
+                {select(
+                  t("Destination", "Tujuan"),
+                  "destination",
+                  [
+                    ["A-01", "A-01"],
+                    ["A-02", "A-02"],
+                  ],
+                  "A-01",
+                )}
+                {scanLocation(destination)}
+                {qtyField(task.remaining, task.remaining)}
+              </div>,
+              () =>
+                review(
+                  "return-stock",
+                  {
+                    task: task.id,
+                    qty: q,
+                    scan: value("scan"),
+                    destination,
+                    locationScan: value("locationScan"),
+                  },
+                  [
+                    itemDetails(task.sku),
+                    quantityDetails(q),
+                    [t("From / to", "Dari / ke"), `Staging / ${destination}`],
+                  ],
+                ),
+              t("Review stock return", "Tinjau barang kembali"),
+            )}
+          </>
+        ) : (
+          <Empty
+            title={t(
+              "No physical returns waiting",
+              "Belum ada pengembalian fisik yang menunggu",
+            )}
+          />
+        )}
+        {next(
+          "returns",
+          "Open customer returns for shipped items",
+          "Buka retur pelanggan untuk barang terkirim",
+        )}
+      </Panel>
+    );
+  } else if (route === "transfers") {
+    const mode = value("mode", "receive");
+    const docs = data.transfers.filter((tr) =>
+      mode === "receive" ? tr.to === warehouse : tr.from === warehouse,
+    );
+    const doc = docs.find((tr) => tr.id === d.document) || docs[0];
+    const remaining = doc ? doc.sent - doc.received : 0;
+    const q = Number(
+      value("qty", mode === "receive" ? Math.min(48, remaining) : 50),
+    );
+    content = (
+      <Panel title={t("Transfer workspace", "Ruang kerja transfer")}>
+        <Tabs
+          label={t("Transfer action", "Tindakan transfer")}
+          items={[
+            ["receive", t("Incoming transfers", "Transfer masuk")],
+            ["send", t("Dispatch transfer", "Kirim transfer")],
+          ]}
+          value={mode}
+          onChange={(mode) =>
+            patch({ mode, qty: undefined, scan: "", locationScan: "" })
+          }
+        />
+        {mode === "receive" ? (
+          !doc ? (
+            <Empty
+              title={t("No incoming transfers", "Belum ada transfer masuk")}
+            />
+          ) : (
+            <>
+              {select(
+                t("Transfer document", "Dokumen transfer"),
+                "document",
+                docs.map((d) => [d.id, d.id]),
+                doc.id,
+              )}
+              <Summary
+                items={[
+                  [t("From", "Dari"), doc.from],
+                  [t("To", "Ke"), doc.to],
+                  [t("Sent", "Dikirim"), `${doc.sent} ${t("units", "unit")}`],
+                  [
+                    t("Received", "Diterima"),
+                    `${doc.received} ${t("units", "unit")}`,
+                  ],
+                  [
+                    t("In transit", "Dalam perjalanan"),
+                    `${remaining} ${t("units", "unit")}`,
+                  ],
+                ]}
+              />
+              {remaining > 0 ? (
+                form(
+                  <>
+                    <div className="form-grid">
+                      {scanField(doc.sku)}
+                      {qtyField(Math.min(48, remaining), remaining)}
+                    </div>
+                    <Notice>
+                      {t(
+                        "Any unreceived units remain in transit. Receiving does not write off the difference.",
+                        "Unit yang belum diterima tetap dalam perjalanan. Penerimaan tidak menghapus selisih.",
+                      )}
+                    </Notice>
+                  </>,
+                  () =>
+                    review(
+                      "transfer-receive",
+                      { document: doc.id, scan: value("scan"), qty: q },
+                      [
+                        [t("Transfer", "Transfer"), doc.id],
+                        quantityDetails(q),
+                        [
+                          t("Remaining in transit", "Sisa dalam perjalanan"),
+                          `${remaining - q} ${t("units", "unit")}`,
+                        ],
+                      ],
+                    ),
+                  t("Review actual receipt", "Tinjau terima aktual"),
+                )
+              ) : (
+                <Notice kind="success">
+                  {t(
+                    "Transfer received in full.",
+                    "Transfer diterima seluruhnya.",
+                  )}
+                </Notice>
+              )}
+            </>
+          )
+        ) : (
+          form(
+            <>
+              <Summary
+                items={[
+                  [t("From", "Dari"), warehouse],
+                  [t("To", "Ke"), warehouse === MAIN ? SECONDARY : MAIN],
+                  [t("Item / location", "Barang / lokasi"), "SKU-A · A-01"],
+                ]}
+              />
+              <div className="form-grid">
+                {scanField("SKU-A")}
+                {scanLocation("A-01")}
+                {qtyField(50)}
+              </div>
+            </>,
+            () =>
+              review(
+                "transfer-send",
+                {
+                  sku: "SKU-A",
+                  location: "A-01",
+                  locationScan: value("locationScan"),
+                  scan: value("scan"),
+                  qty: q,
+                  to: warehouse === MAIN ? SECONDARY : MAIN,
+                },
+                [
+                  itemDetails("SKU-A"),
+                  quantityDetails(q),
+                  [
+                    t("Destination", "Tujuan"),
+                    warehouse === MAIN ? SECONDARY : MAIN,
+                  ],
+                ],
+              ),
+            t("Review dispatch", "Tinjau pengiriman"),
+          )
+        )}
+      </Panel>
+    );
+  } else if (route === "returns") {
+    const mode = value("mode", "customer");
+    const sku = mode === "customer" ? "SKU-A" : "SKU-B";
+    const source = value(
+      "source",
+      mode === "customer" ? "HIST-SIM-020" : "OPEN-SIM-001",
+    );
+    const q = Number(value("qty", 5));
+    content = (
+      <Panel title={t("Return details", "Detail retur")}>
+        <Tabs
+          label={t("Return type", "Jenis retur")}
+          items={[
+            ["customer", t("Customer return", "Retur pelanggan")],
+            ["supplier", t("Supplier return", "Retur supplier")],
+          ]}
+          value={mode}
+          onChange={(mode) =>
+            patch({ mode, source: undefined, qty: undefined, scan: "" })
+          }
+        />
+        {form(
+          <>
+            <div className="form-grid">
+              {field(
+                t("Source document (required)", "Dokumen asal (wajib)"),
+                "source",
+                mode === "customer" ? "HIST-SIM-020" : "OPEN-SIM-001",
+                { required: true },
+              )}
+              {scanField(sku)}
+              {qtyField(5)}
+              {reasonField(true)}
+            </div>
+            <Notice>
+              {mode === "customer"
+                ? t(
+                    "HIST-SIM-020 is a historical demo shipment allowing 5 units. Returned items go to Receiving on QC hold, not directly to available stock.",
+                    "HIST-SIM-020 adalah contoh pengiriman historis dengan batas retur 5 unit. Barang retur masuk Receiving dan ditahan untuk QC.",
+                  )
+                : t(
+                    "Supplier return uses unreserved, not good stock at QC. A separate confirmed dispatch reduces physical stock.",
+                    "Retur supplier memakai stok tidak bagus yang tidak dipesan di QC. Konfirmasi pengiriman terpisah mengurangi stok fisik.",
+                  )}
+            </Notice>
+          </>,
+          () =>
+            review(
+              mode === "customer" ? "customer-return" : "supplier-return",
+              {
+                sku,
+                source,
+                scan: value("scan"),
+                qty: q,
+                reason: value("reason"),
+              },
+              [
+                [t("Source", "Sumber"), source],
+                itemDetails(sku),
+                quantityDetails(q),
+                [
+                  t("Result", "Hasil"),
+                  mode === "customer"
+                    ? "Receiving · QC"
+                    : t(
+                        "Physical dispatch to supplier",
+                        "Pengiriman fisik ke supplier",
+                      ),
+                ],
+              ],
+            ),
+          mode === "customer"
+            ? t("Review return receipt", "Tinjau penerimaan retur")
+            : t("Review return dispatch", "Tinjau pengiriman retur"),
+          mode === "supplier" && user.role === "operator",
+        )}
+        {next(
+          "quality",
+          "Open quality inspection",
+          "Buka pemeriksaan kualitas",
+        )}
+        <DataTable
+          label={t("Return history", "Riwayat retur")}
+          empty={t("No returns recorded yet.", "Belum ada retur tercatat.")}
+          rows={scoped(data.returns)}
+          columns={[
+            { key: "id", label: t("Transaction", "Transaksi") },
+            { key: "source", label: t("Source", "Sumber") },
+            { key: "sku", label: t("Item", "Barang") },
+            {
+              key: "qty",
+              label: t("Actual (units)", "Aktual (unit)"),
+              numeric: true,
+            },
+          ]}
+        />
+      </Panel>
+    );
+  } else if (route === "count") {
+    const task = scoped(data.counts).find((c) => c.status !== "closed");
+    const reviewer =
+      user.role !== "operator" && value("view", "count") === "review";
+    const q = Number(value("qty", ""));
+    content = (
+      <Panel title={t("Count workspace", "Ruang kerja opname")}>
+        {user.role !== "operator" && (
+          <Tabs
+            label={t("Count view", "Tampilan hitung")}
+            items={[
+              ["count", t("Counting view", "Tampilan penghitung")],
+              ["review", t("Authorized review", "Tinjauan berwenang")],
+            ]}
+            value={value("view", "count")}
+            onChange={(view) => patch({ view })}
+          />
+        )}
+        {!task ? (
+          <>
+            <Empty
+              title={t("No active count task", "Belum ada tugas hitung aktif")}
+            />
+            {user.role !== "operator" && (
+              <Button
+                primary
+                onClick={() =>
+                  review("freeze", { sku: "SKU-A", location: "A-01" }, [
+                    [t("Scope", "Lingkup"), `${warehouse} · A-01 · SKU-A`],
+                    [
+                      t("Effect", "Dampak"),
+                      t(
+                        "Freeze A-01 and create a blind count task",
+                        "Bekukan A-01 dan buat tugas hitung tanpa saldo",
+                      ),
+                    ],
+                  ])
+                }
+              >
+                {t(
+                  "Freeze A-01 and start count",
+                  "Bekukan A-01 dan mulai hitung",
+                )}
+              </Button>
+            )}
+          </>
+        ) : (
+          <>
+            <Summary
+              items={[
+                [t("Count task", "Tugas hitung"), task.id],
+                [t("Item", "Barang"), task.sku],
+                [t("Location", "Lokasi"), task.location],
+                [t("Status", "Status"), task.status],
+              ]}
+            />
+            <Notice kind="warning">
+              {t(
+                "This location remains frozen until an authorized release. Closing the browser does not release it.",
+                "Lokasi tetap dibekukan sampai dibuka oleh pengguna berwenang. Menutup browser tidak membukanya.",
+              )}
+            </Notice>
+            {reviewer ? (
+              <>
+                <Summary
+                  items={[
+                    [t("Snapshot (units)", "Snapshot (unit)"), task.expected],
+                    [
+                      t("Counted (units)", "Hasil hitung (unit)"),
+                      task.actual ?? t("Not submitted", "Belum dikirim"),
+                    ],
+                    [
+                      t("Difference (units)", "Selisih (unit)"),
+                      task.actual === null
+                        ? t("Not available", "Belum tersedia")
+                        : task.actual - task.expected,
+                    ],
+                    [
+                      t("Counter", "Penghitung"),
+                      task.counter || t("Not assigned yet", "Belum ditetapkan"),
+                    ],
+                  ]}
+                />
+                {task.status === "review" && (
+                  <>
+                    {reasonField(true)}
+                    <div className="form-actions">
+                      <Button
+                        onClick={() =>
+                          review("recount", { task: task.id }, [
+                            [t("Task", "Tugas"), task.id],
+                            [
+                              t("Action", "Tindakan"),
+                              t(
+                                "Create another count attempt",
+                                "Buat percobaan hitung lagi",
+                              ),
+                            ],
+                          ])
+                        }
+                      >
+                        {t("Request recount", "Minta hitung ulang")}
+                      </Button>
+                      <Button
+                        primary
+                        disabled={task.counter === user.id}
+                        onClick={() =>
+                          review(
+                            "adjust-count",
+                            { task: task.id, reason: value("reason") },
+                            [
+                              [t("Task", "Tugas"), task.id],
+                              [
+                                t("Adjustment", "Penyesuaian"),
+                                `${task.actual - task.expected} ${t("units", "unit")}`,
+                              ],
+                              [t("Reason", "Alasan"), value("reason")],
+                            ],
+                          )
+                        }
+                      >
+                        {t("Approve adjustment", "Setujui penyesuaian")}
+                      </Button>
+                    </div>
+                    {task.counter === user.id && (
+                      <Notice>
+                        {t(
+                          "A different authorized reviewer must approve your count. Switch demo user in Settings.",
+                          "Peninjau berwenang lain perlu menyetujui hasil kamu. Ganti pengguna demo di Pengaturan.",
+                        )}
+                      </Notice>
+                    )}
+                  </>
+                )}
+                {task.status === "adjusted" && (
+                  <Button
+                    primary
+                    onClick={() =>
+                      review("unfreeze", { task: task.id }, [
+                        [t("Task", "Tugas"), task.id],
+                        [
+                          t("Location to release", "Lokasi yang dibuka"),
+                          task.location,
+                        ],
+                      ])
+                    }
+                  >
+                    {t("Release location freeze", "Buka pembekuan lokasi")}
+                  </Button>
+                )}
+              </>
+            ) : task.status === "counting" ? (
+              form(
+                <>
+                  {field(
+                    t(
+                      "Counted quantity (units, required)",
+                      "Hasil hitung (unit, wajib)",
+                    ),
+                    "qty",
+                    "",
+                    { type: "number", min: 0, step: 1, required: true },
+                  )}
+                  <Notice>
+                    {t(
+                      "Enter your physical count. The expected balance is hidden. Submission does not adjust stock.",
+                      "Isi hasil hitung fisik kamu. Saldo pembanding disembunyikan. Mengirim hasil belum menyesuaikan stok.",
+                    )}
+                  </Notice>
+                </>,
+                () =>
+                  review("count-submit", { task: task.id, qty: q }, [
+                    [t("Task", "Tugas"), task.id],
+                    [t("Counted", "Terhitung"), `${q} ${t("units", "unit")}`],
+                  ]),
+                t("Submit count", "Kirim hasil hitung"),
+              )
+            ) : (
+              <Notice>
+                {t(
+                  "Count submitted. An authorized reviewer handles the next step.",
+                  "Hasil hitung dikirim. Peninjau berwenang menangani langkah berikutnya.",
+                )}
+              </Notice>
+            )}
+          </>
+        )}
+      </Panel>
+    );
+  }
+  return (
+    <div className="stack">
+      {content}
+      {!["orders", "count", "returns", "transfers", "cancellation"].includes(
+        route,
+      ) && history}
+    </div>
+  );
+}

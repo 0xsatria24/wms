@@ -1,0 +1,8 @@
+{
+  "status": "INCOMPLETE",
+  "scope": "Revised Ledger draft browser verification",
+  "static_checks": "static-checks.json",
+  "browser_attempt": "browser-attempt.json",
+  "production_uat_run": false,
+  "note": "Existing desktop render and static-checks.json are historical. Revised draft passed syntax, HTML structure and 50 token contrast checks recorded in ../review.md. Current render, interaction, responsive and download checks remain open due to environment policy."
+}

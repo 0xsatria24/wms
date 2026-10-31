@@ -1,0 +1,1768 @@
+{
+  "scope": "Static design artifacts only, no runtime or UAT",
+  "function_count": 21,
+  "boards": [
+    {
+      "file": "00-foundation.png",
+      "width": 1600,
+      "height": 1400,
+      "text_runs": 45,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Aktual diterima",
+          "x": 840,
+          "y": 566,
+          "w": 712,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Konfirmasi penerimaan",
+          "x": 840,
+          "y": 653,
+          "w": 252,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Ubah aktual",
+          "x": 1112,
+          "y": 653,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "00-states.png",
+      "width": 1600,
+      "height": 1120,
+      "text_runs": 26,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Lihat lingkup",
+          "x": 68,
+          "y": 427,
+          "w": 444,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Hapus filter",
+          "x": 578,
+          "y": 427,
+          "w": 444,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Buka pending",
+          "x": 68,
+          "y": 842,
+          "w": 444,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Periksa hasil",
+          "x": 578,
+          "y": 842,
+          "w": 444,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Tinjau konflik",
+          "x": 1088,
+          "y": 842,
+          "w": 444,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "00-confirmation-review.png",
+      "width": 1600,
+      "height": 1080,
+      "text_runs": 36,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Kembali ubah aktual",
+          "x": 80,
+          "y": 882,
+          "w": 240,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi penerimaan",
+          "x": 736,
+          "y": 882,
+          "w": 296,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "01-akses-dan-lingkup.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Perusahaan",
+          "x": 548,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Gudang",
+          "x": 978,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Tampilan",
+          "x": 548,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Draf terbuka",
+          "x": 978,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Tinjau draf",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Gunakan lingkup ini",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "02-master-barang-lokasi-satuan.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 51,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Barang",
+          "x": 256,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Identifier",
+          "x": 542,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Satuan",
+          "x": 828,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Lokasi",
+          "x": 1114,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Tambah master",
+          "x": 1112,
+          "y": 888,
+          "w": 280,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Lihat perubahan",
+          "x": 916,
+          "y": 888,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "03-posisi-stok-dan-saldo-awal.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 51,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Gudang",
+          "x": 256,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Pemilik",
+          "x": 542,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Lokasi",
+          "x": 828,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Kondisi",
+          "x": 1114,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Tinjau saldo awal",
+          "x": 1112,
+          "y": 888,
+          "w": 280,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Buka kartu stok",
+          "x": 916,
+          "y": 888,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "04-ketersediaan-dan-reservasi.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Muat stok terbaru",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi reservasi",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "file": "05-penerimaan-aktual.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 52,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Scan barang / identitas",
+          "x": 548,
+          "y": 331,
+          "w": 844,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Ubah aktual",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi penerimaan",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "06-qc-dan-karantina.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Diperiksa",
+          "x": 548,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Layak",
+          "x": 978,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Ditolak / tetap ditahan",
+          "x": 548,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Order terkait",
+          "x": 978,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Buka order terkait",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Simpan hasil inspeksi",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "07-penempatan-putaway.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 55,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Scan lokasi tujuan",
+          "x": 548,
+          "y": 331,
+          "w": 844,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Ubah tujuan",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi penempatan",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "08-order-dan-persetujuan.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Produk A",
+          "x": 548,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Tujuan",
+          "x": 978,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Alasan",
+          "x": 548,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Keputusan",
+          "x": 978,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Kembalikan untuk ditinjau",
+          "x": 548,
+          "y": 904,
+          "w": 206,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Setujui dan lepas order",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "09-picking-dan-short-pick.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 55,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Scan barang / identitas",
+          "x": 548,
+          "y": 331,
+          "w": 844,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Catat kekurangan",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi aktual picking",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "10-packing-dan-pengiriman.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 55,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Scan barang / identitas",
+          "x": 548,
+          "y": 331,
+          "w": 844,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Tinjau isi paket",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi pengiriman",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "11-pembatalan-dan-kembali-stok.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 47,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "8 unit dipicking",
+          "x": 548,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "2 unit belum dipicking",
+          "x": 978,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Bagian terkirim",
+          "x": 548,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Buka tugas kembali",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Ajukan pembatalan",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "12-transfer-dan-perjalanan.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 52,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Scan barang / identitas",
+          "x": 548,
+          "y": 331,
+          "w": 844,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Tinjau selisih",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi terima transfer",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "13-retur-pelanggan-supplier.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Dokumen asal",
+          "x": 548,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Barang / aktual",
+          "x": 978,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Kondisi masuk",
+          "x": 548,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Alasan dan bukti",
+          "x": 978,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Tinjau sumber",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi penerimaan retur",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "14-opname-dan-penyesuaian.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 46,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Barang / batch / serial",
+          "x": 548,
+          "y": 478,
+          "w": 844,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Aktual fisik",
+          "x": 548,
+          "y": 588,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Satuan",
+          "x": 978,
+          "y": 588,
+          "w": 414,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Simpan draf hitung",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Kirim hasil hitung",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "15-integrasi-erp.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Catat rekonsiliasi",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Coba kirim event yang sama",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "16-kartu-stok-dan-laporan.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Buka transaksi sumber",
+          "x": 548,
+          "y": 904,
+          "w": 182,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Ekspor lingkup ini",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "17-pending-konflik-dan-retry.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 53,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Buka detail maksud",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Periksa hasil konfirmasi",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "18-monitoring-backup-pemulihan.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 53,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Buka bukti pemulihan",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Buka kasus terpilih",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "19-tracker-dan-detail-unit.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Buka pengecualian",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Buka dokumen sumber",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "20-label-kemasan-dan-perangkat.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 50,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Namespace + nilai",
+          "x": 548,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Objek dan satuan",
+          "x": 978,
+          "y": 476,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Label pengganti",
+          "x": 548,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Reader / gateway",
+          "x": 978,
+          "y": 612,
+          "w": 406,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Lihat riwayat label",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Tinjau pemetaan label",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "21-sesi-rfid-pilot.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 56,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Gunakan barcode",
+          "x": 548,
+          "y": 904,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Tinjau hasil sesi",
+          "x": 1162,
+          "y": 904,
+          "w": 230,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "05-penerimaan-aktual-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 23,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Scan barang",
+          "x": 16,
+          "y": 373,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Aktual penerimaan (unit)",
+          "x": 16,
+          "y": 475,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Konfirmasi penerimaan",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "07-penempatan-putaway-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 23,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Scan lokasi tujuan",
+          "x": 16,
+          "y": 373,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Aktual penempatan (unit)",
+          "x": 16,
+          "y": 475,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Konfirmasi penempatan",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "09-picking-dan-short-pick-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 23,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Scan barang, asal A-01",
+          "x": 16,
+          "y": 373,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Aktual ditemukan (unit)",
+          "x": 16,
+          "y": 475,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Konfirmasi aktual picking",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "10-packing-dan-pengiriman-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 22,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Verifikasi barang siap kirim",
+          "x": 16,
+          "y": 373,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Aktual pengiriman (unit)",
+          "x": 16,
+          "y": 475,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Konfirmasi pengiriman",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "14-opname-dan-penyesuaian-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 22,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Scan barang",
+          "x": 16,
+          "y": 373,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Aktual fisik / satuan",
+          "x": 16,
+          "y": 475,
+          "w": 358,
+          "h": 52,
+          "static": true
+        },
+        {
+          "label": "Kirim hasil hitung",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "17-pending-konflik-dan-retry-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 24,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Periksa hasil konfirmasi",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "21-sesi-rfid-pilot-handheld.png",
+      "width": 390,
+      "height": 1120,
+      "text_runs": 22,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 16,
+          "y": 63,
+          "w": 78,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Tinjau hasil sesi",
+          "x": 16,
+          "y": 1001,
+          "w": 358,
+          "h": 52,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "05-penerimaan-aktual-tablet.png",
+      "width": 900,
+      "height": 1100,
+      "text_runs": 30,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Menu",
+          "x": 24,
+          "y": 48,
+          "w": 84,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Dokumen dan lokasi",
+          "x": 24,
+          "y": 250,
+          "w": 852,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Scan barang",
+          "x": 48,
+          "y": 426,
+          "w": 804,
+          "h": 48,
+          "static": true
+        },
+        {
+          "label": "Ubah aktual",
+          "x": 48,
+          "y": 932,
+          "w": 170,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Konfirmasi penerimaan",
+          "x": 578,
+          "y": 932,
+          "w": 274,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "file": "03-posisi-stok-dan-saldo-awal-dark.png",
+      "width": 1440,
+      "height": 1080,
+      "text_runs": 51,
+      "out_of_canvas": [],
+      "small_controls": [],
+      "controls": [
+        {
+          "label": "Gudang",
+          "x": 256,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Pemilik",
+          "x": 542,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Lokasi",
+          "x": 828,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Kondisi",
+          "x": 1114,
+          "y": 324,
+          "w": 268,
+          "h": 46,
+          "static": true
+        },
+        {
+          "label": "Tinjau saldo awal",
+          "x": 1112,
+          "y": 888,
+          "w": 280,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        },
+        {
+          "label": "Buka kartu stok",
+          "x": 916,
+          "y": 888,
+          "w": 180,
+          "h": 44,
+          "static": true,
+          "disabled": false
+        }
+      ]
+    }
+  ],
+  "contrast_pairs": [
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "canvas",
+      "ratio": 12.039663246139291,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "surface",
+      "ratio": 13.134380111032778,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "alt",
+      "ratio": 11.703505734042496,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "selection",
+      "ratio": 10.77613546754953,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "canvas",
+      "ratio": 6.136702946055155,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "surface",
+      "ratio": 6.694688005316869,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "alt",
+      "ratio": 5.965361044487893,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "selection",
+      "ratio": 5.492673749990994,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "on_action",
+      "bg": "action",
+      "ratio": 6.32640986858459,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "warning",
+      "bg": "warning_soft",
+      "ratio": 6.128864514732981,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "danger",
+      "bg": "danger_soft",
+      "ratio": 6.253043836313502,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "success",
+      "bg": "success_soft",
+      "ratio": 6.269510166355424,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "text",
+      "fg": "action",
+      "bg": "soft",
+      "ratio": 5.530988568370848,
+      "minimum": 4.5
+    },
+    {
+      "theme": "light",
+      "kind": "control",
+      "fg": "line",
+      "bg": "canvas",
+      "ratio": 3.2510510374093045,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "kind": "control",
+      "fg": "line",
+      "bg": "surface",
+      "ratio": 3.5466556840278605,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "kind": "control",
+      "fg": "line",
+      "bg": "alt",
+      "ratio": 3.1602789613061235,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "kind": "control",
+      "fg": "focus",
+      "bg": "canvas",
+      "ratio": 5.376156096450998,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "kind": "control",
+      "fg": "focus",
+      "bg": "surface",
+      "ratio": 5.864987771121971,
+      "minimum": 3
+    },
+    {
+      "theme": "light",
+      "kind": "control",
+      "fg": "focus",
+      "bg": "alt",
+      "ratio": 5.226049301843888,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "canvas",
+      "ratio": 15.043145134735791,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "surface",
+      "ratio": 13.493277133125702,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "alt",
+      "ratio": 11.290057878605381,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "ink",
+      "bg": "selection",
+      "ratio": 10.078303030287346,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "canvas",
+      "ratio": 9.79514518424084,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "surface",
+      "ratio": 8.785969113930548,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "alt",
+      "ratio": 7.351372008242221,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "muted",
+      "bg": "selection",
+      "ratio": 6.56235385009285,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "on_action",
+      "bg": "action",
+      "ratio": 7.978363433213471,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "warning",
+      "bg": "warning_soft",
+      "ratio": 8.04103383404659,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "danger",
+      "bg": "danger_soft",
+      "ratio": 7.9803614843101975,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "success",
+      "bg": "success_soft",
+      "ratio": 7.61782483306351,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "text",
+      "fg": "action",
+      "bg": "soft",
+      "ratio": 6.621942740141789,
+      "minimum": 4.5
+    },
+    {
+      "theme": "dark",
+      "kind": "control",
+      "fg": "line",
+      "bg": "canvas",
+      "ratio": 5.862617599272339,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "kind": "control",
+      "fg": "line",
+      "bg": "surface",
+      "ratio": 5.258602724629706,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "kind": "control",
+      "fg": "line",
+      "bg": "alt",
+      "ratio": 4.399963666047402,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "kind": "control",
+      "fg": "focus",
+      "bg": "canvas",
+      "ratio": 10.767381026597135,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "kind": "control",
+      "fg": "focus",
+      "bg": "surface",
+      "ratio": 9.658037258070129,
+      "minimum": 3
+    },
+    {
+      "theme": "dark",
+      "kind": "control",
+      "fg": "focus",
+      "bg": "alt",
+      "ratio": 8.081046476815379,
+      "minimum": 3
+    }
+  ],
+  "missing_local_links": [],
+  "text_issues": [],
+  "requirements": {
+    "fr": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "trk": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+    ]
+  },
+  "runtime": "Not implemented or tested",
+  "uat": "Not run"
+}

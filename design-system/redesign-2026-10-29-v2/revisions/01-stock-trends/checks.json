@@ -1,0 +1,85 @@
+{
+  "scope": "static design JSON, fixture arithmetic and local links only",
+  "implementation_tests": "NOT_RUN",
+  "uat": "NOT_RUN",
+  "monthly_sum": 1100,
+  "comparison_arithmetic": "PASS",
+  "token_contrast_pairs": [
+    {
+      "foreground": "text",
+      "background": "surface",
+      "ratio": 15.506,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "textMuted",
+      "background": "surface",
+      "ratio": 6.306,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "primaryText",
+      "background": "primaryBackground",
+      "ratio": 5.985,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "selectionText",
+      "background": "selectionBackground",
+      "ratio": 5.359,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "conditionGoodText",
+      "background": "conditionGoodBackground",
+      "ratio": 6.508,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "conditionNotGoodText",
+      "background": "conditionNotGoodBackground",
+      "ratio": 7.062,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "errorText",
+      "background": "errorBackground",
+      "ratio": 6.824,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "foreground": "controlBorder",
+      "background": "surface",
+      "ratio": 3.728,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "foreground": "focus",
+      "background": "surface",
+      "ratio": 5.985,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "foreground": "chartSeries",
+      "background": "surface",
+      "ratio": 5.985,
+      "minimum": 3,
+      "pass": true
+    }
+  ],
+  "missing_local_links": [],
+  "raster_pixels": [
+    1448,
+    1086
+  ],
+  "raster_contrast_measured": false
+}

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="1120" viewBox="0 0 390 1120" role="img" aria-labelledby="title desc"><title id="title">Picking dan kekurangan handheld</title><desc id="desc">Rancangan statis Inventory WMS. Semua angka, kode dan keadaan operasional merupakan data simulasi; kontrol tidak interaktif.</desc>
+<rect x="0" y="0" width="390" height="1120" rx="0" fill="#f6f5f1"/>
+<rect x="0" y="0" width="390" height="52" rx="0" fill="#29313c"/>
+<text x="16.00" y="21" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">DESAIN STATIS / DATA SIMULASI</text>
+<text x="16.00" y="40" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#ffffff">Kontrol berupa gambar</text>
+<rect x="0" y="52" width="390" height="66" rx="0" fill="#ffffff"/>
+<rect x="16" y="63" width="78" height="44" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="30.00" y="90" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Menu</text>
+<text x="112.00" y="84" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Inventory / WMS</text>
+<text x="112.00" y="102" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">[Perusahaan] / [Gudang]</text>
+<text x="16.00" y="162" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#29313c">Picking dan kekurangan</text>
+<text x="16.00" y="221" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Tugas [SIM-PICK-A]</text>
+<line x1="16" y1="260" x2="374" y2="260" stroke="#dce1e7" stroke-width="1"/>
+<text x="16.00" y="299" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Catat aktual pengambilan</text>
+<text x="16.00" y="361" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Scan barang, asal A-01</text>
+<rect x="16" y="373" width="358" height="52" rx="4" fill="#ffffff" stroke="#156d89"/>
+<rect x="12" y="369" width="366" height="60" rx="5" fill="none" stroke="#156d89" stroke-width="3"/>
+<text x="28.00" y="403" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">[SKU-A] · Produk A</text>
+<text x="16.00" y="463" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Aktual ditemukan (unit)</text>
+<rect x="16" y="475" width="358" height="52" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="28.00" y="505" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">8</text>
+<rect x="16" y="562" width="358" height="142" rx="6" fill="#ffffff"/>
+<text x="32.00" y="595" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Aktual ditemukan</text>
+<text x="32.00" y="643" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#29313c">8 unit</text>
+<text x="32.00" y="677" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Rencana 10; sisa order 2 tetap terlacak</text>
+<text x="16.00" y="747" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Asal / barang</text>
+<text x="16.00" y="773" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">[SIM-A-01] · Produk A</text>
+<text x="16.00" y="823" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Tujuan / sisa</text>
+<text x="16.00" y="849" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Staging · 2 unit masih terbuka</text>
+<text x="16.00" y="906" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Picking ke staging mempertahankan fisik gudang dan</text>
+<text x="16.00" y="927" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">komitmen.</text>
+<line x1="0" y1="984" x2="390" y2="984" stroke="#dce1e7" stroke-width="1"/>
+<rect x="0" y="985" width="390" height="135" rx="0" fill="#ffffff"/>
+<rect x="16" y="1001" width="358" height="52" rx="4" fill="#116a70"/>
+<text x="30.00" y="1032" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">Konfirmasi aktual picking</text>
+<text x="16.00" y="1082" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">Footer disisihkan dari isi; keyboard perlu uji perangkat.</text>
+</svg>

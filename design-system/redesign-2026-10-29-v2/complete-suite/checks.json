@@ -1,0 +1,29 @@
+{
+  "function_specs": 21,
+  "boards": {
+    "01-access-master.png": [
+      1448,
+      1086
+    ],
+    "02-inbound.png": [
+      1448,
+      1086
+    ],
+    "03-outbound.png": [
+      1448,
+      1086
+    ],
+    "04-control.png": [
+      1448,
+      1086
+    ],
+    "05-components-responsive.png": [
+      1448,
+      1086
+    ]
+  },
+  "broken_links": [],
+  "browser_tests": "NOT_RUN",
+  "UAT": "NOT_RUN",
+  "status": "draft-with-review-findings"
+}

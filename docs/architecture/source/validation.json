@@ -1,0 +1,51 @@
+{
+  "pages": 13,
+  "portrait_pages": [
+    1,
+    2,
+    4,
+    5,
+    8,
+    9,
+    10,
+    13
+  ],
+  "landscape_pages": [
+    3,
+    6,
+    7,
+    11,
+    12
+  ],
+  "words_per_page": [
+    150,
+    218,
+    169,
+    231,
+    229,
+    175,
+    159,
+    145,
+    220,
+    213,
+    278,
+    295,
+    212
+  ],
+  "outline_entries": 13,
+  "link_annotations": 27,
+  "external_links": 3,
+  "verified_internal_links": 24,
+  "acceptance_scenarios": 14,
+  "overlapping_text_blocks": 0,
+  "contrast_ratios": {
+    "#20292D on #FFFFFF": 14.83,
+    "#4F5C63 on #FFFFFF": 6.9,
+    "#4F5C63 on #F2F4F4": 6.25,
+    "#234D45 on #EDF3F1": 8.42,
+    "#234D45 on #FFFFFF": 9.46
+  },
+  "source": "C:\\Users\\muham\\OneDrive\\Documents\\ChatGPT\\inventory management system\\docs\\architecture\\source\\build_inventory_architecture_formal.py",
+  "output": "C:\\Users\\muham\\OneDrive\\Documents\\ChatGPT\\inventory management system\\docs\\architecture\\arsitektur-inventory-wms.pdf",
+  "size_bytes": 113705
+}

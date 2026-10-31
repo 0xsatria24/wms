@@ -1,0 +1,111 @@
+{
+  "scope": "Documentation structure and traceability only",
+  "date": "2026-10-28",
+  "status": "PASS",
+  "planning_documents": 6,
+  "markdown_files_checked": 12,
+  "local_links_checked": 58,
+  "anchors_checked": 1,
+  "mermaid_diagram_sources": 7,
+  "functional_requirements": 16,
+  "uat_criteria": 14,
+  "uat_plan_mappings": 14,
+  "uat_execution_status": "NOT_RUN",
+  "open_decisions": 5,
+  "source_architecture_scenarios": {
+    "business_scenarios": 7,
+    "failure_scenarios": 7
+  },
+  "engineering_references": [
+    "ISO/IEC/IEEE 29148:2018",
+    "ISO/IEC/IEEE 15288:2023"
+  ],
+  "standards_full_clause_conformance_assessed": false,
+  "p0_status": "IN_PROGRESS",
+  "p1_backlog_items": 10,
+  "p1_status": "NOT_STARTED",
+  "mermaid_visual_render_verified": false,
+  "pdf_regenerated": false,
+  "documents": [
+    {
+      "path": "README.md",
+      "lines": 12,
+      "words": 84,
+      "bytes": 831
+    },
+    {
+      "path": "docs/planning/01-product-requirements.md",
+      "lines": 120,
+      "words": 1861,
+      "bytes": 12630
+    },
+    {
+      "path": "docs/planning/02-technical-requirements.md",
+      "lines": 143,
+      "words": 1935,
+      "bytes": 14377
+    },
+    {
+      "path": "docs/planning/03-app-flow.md",
+      "lines": 180,
+      "words": 1474,
+      "bytes": 10849
+    },
+    {
+      "path": "docs/planning/04-design-brief.md",
+      "lines": 101,
+      "words": 1383,
+      "bytes": 10105
+    },
+    {
+      "path": "docs/planning/05-backend-schema.md",
+      "lines": 171,
+      "words": 2085,
+      "bytes": 15664
+    },
+    {
+      "path": "docs/planning/06-implementation-plan.md",
+      "lines": 111,
+      "words": 1436,
+      "bytes": 10303
+    },
+    {
+      "path": "docs/planning/engineering-basis.md",
+      "lines": 54,
+      "words": 544,
+      "bytes": 4106
+    },
+    {
+      "path": "docs/planning/p0/backlog-p1.md",
+      "lines": 30,
+      "words": 535,
+      "bytes": 3827
+    },
+    {
+      "path": "docs/planning/p0/README.md",
+      "lines": 70,
+      "words": 834,
+      "bytes": 6116
+    },
+    {
+      "path": "docs/planning/README.md",
+      "lines": 43,
+      "words": 480,
+      "bytes": 3981
+    },
+    {
+      "path": "docs/planning/review.md",
+      "lines": 105,
+      "words": 1593,
+      "bytes": 10493
+    }
+  ],
+  "failures": [],
+  "design_prototype": {
+    "status": "REVIEW_CANDIDATE",
+    "direction": "User ERP screenshot with Ledger tone",
+    "browser_verification": "INCOMPLETE",
+    "production_uat_run": false
+  },
+  "production_ui_or_backend_tests_run": false
+}

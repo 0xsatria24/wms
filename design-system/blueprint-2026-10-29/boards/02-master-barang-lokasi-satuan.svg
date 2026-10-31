@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1080" viewBox="0 0 1440 1080" role="img" aria-labelledby="title desc"><title id="title">Master barang dan lokasi</title><desc id="desc">Rancangan statis Inventory WMS. Semua angka, kode dan keadaan operasional merupakan data simulasi; kontrol tidak interaktif.</desc>
+<rect x="0" y="0" width="1440" height="1080" rx="0" fill="#f6f5f1"/>
+<rect x="0" y="0" width="1440" height="32" rx="0" fill="#29313c"/>
+<text x="20.00" y="19" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#ffffff">DESAIN STATIS / Data simulasi / Kontrol berupa gambar, bukan aplikasi</text>
+<rect x="0" y="32" width="208" height="1048" rx="0" fill="#ffffff"/>
+<text x="24.00" y="77" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Inventory / WMS</text>
+<text x="24.00" y="101" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">Rancangan kerja gudang</text>
+<line x1="24" y1="126" x2="184" y2="126" stroke="#dce1e7" stroke-width="1"/>
+<rect x="12" y="146" width="184" height="44" rx="4" fill="#e9e9e3"/>
+<text x="24.00" y="172" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Persediaan</text>
+<text x="24.00" y="224" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Barang masuk</text>
+<text x="24.00" y="276" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Barang keluar</text>
+<text x="24.00" y="328" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Transfer dan retur</text>
+<text x="24.00" y="380" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Opname</text>
+<text x="24.00" y="432" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Penelusuran</text>
+<text x="24.00" y="484" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Antrean</text>
+<text x="24.00" y="536" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Integrasi</text>
+<text x="24.00" y="588" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Pengaturan</text>
+<line x1="24" y1="940" x2="184" y2="940" stroke="#dce1e7" stroke-width="1"/>
+<text x="24.00" y="973" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">[Pengguna sesuai akses]</text>
+<text x="24.00" y="1021" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">S02 / usulan desain</text>
+<rect x="209" y="32" width="1231" height="86" rx="0" fill="#ffffff"/>
+<text x="232.00" y="63" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Persediaan / Master barang dan lokasi</text>
+<text x="232.00" y="95" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Master dan identitas</text>
+<text x="1274.00" y="72" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">[Perusahaan] / [Gudang]</text>
+<text x="232.00" y="171" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#29313c">Master barang dan lokasi</text>
+<text x="232.00" y="200" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Memastikan kode, satuan dan lokasi dapat dipakai tanpa ambiguitas pada dokumen baru.</text>
+<text x="1376.00" y="163" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">S02 · P1</text>
+<text x="232.00" y="1067" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="400" fill="#525d6b">29 Oktober 2026 · Blueprint Ledger · S02 · Semua contoh operasional bersifat simulasi</text>
+<rect x="232" y="234" width="1184" height="744" rx="6" fill="#ffffff"/>
+<text x="256.00" y="274" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Barang dan kelengkapan master</text>
+<text x="256.00" y="314" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">Barang</text>
+<rect x="256" y="324" width="268" height="46" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="268.00" y="352" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#29313c">SKU dan tracking</text>
+<text x="542.00" y="314" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">Identifier</text>
+<rect x="542" y="324" width="268" height="46" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="554.00" y="352" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#29313c">Namespace dan pemetaan</text>
+<text x="828.00" y="314" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">Satuan</text>
+<rect x="828" y="324" width="268" height="46" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="840.00" y="352" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#29313c">Dasar dan konversi</text>
+<text x="1114.00" y="314" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">Lokasi</text>
+<rect x="1114" y="324" width="268" height="46" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="1126.00" y="352" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#29313c">Gudang dan status</text>
+<rect x="256" y="402" width="1136" height="42" rx="0" fill="#f0f2f4"/>
+<text x="270.00" y="427" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#525d6b">Barang / kode</text>
+<text x="758.48" y="427" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#525d6b">Satuan dan tracking</text>
+<text x="1133.36" y="427" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#525d6b">Status</text>
+<text x="270.00" y="472" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">[SKU-A] · Produk A</text>
+<text x="758.48" y="472" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Unit · kuantitas</text>
+<text x="1133.36" y="472" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Aktif</text>
+<line x1="256" y1="514" x2="1392" y2="514" stroke="#dce1e7" stroke-width="1"/>
+<text x="270.00" y="542" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">[SKU-B] · Produk B</text>
+<text x="758.48" y="542" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Unit · serial wajib</text>
+<text x="1133.36" y="542" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Perlu pemetaan</text>
+<line x1="256" y1="584" x2="1392" y2="584" stroke="#dce1e7" stroke-width="1"/>
+<text x="270.00" y="612" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">[SKU-C] · Produk C</text>
+<text x="758.48" y="612" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Karton · faktor 12</text>
+<text x="1133.36" y="612" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Aktif</text>
+<line x1="256" y1="654" x2="1392" y2="654" stroke="#dce1e7" stroke-width="1"/>
+<text x="270.00" y="682" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">[SKU-D] · Produk D</text>
+<text x="758.48" y="682" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#29313c">Unit · batch wajib</text>
+<text x="1133.36" y="682" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Nonaktif</text>
+<line x1="256" y1="724" x2="1392" y2="724" stroke="#dce1e7" stroke-width="1"/>
+<text x="256.00" y="764" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Perubahan faktor baru tidak mengubah konversi transaksi lama.</text>
+<line x1="256" y1="826" x2="1392" y2="826" stroke="#dce1e7" stroke-width="1"/>
+<text x="256.00" y="862" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">Identitas aktif</text>
+<text x="256.00" y="898" font-family="Segoe UI, Arial, sans-serif" font-size="25" font-weight="700" fill="#29313c">Satu objek</text>
+<text x="256.00" y="928" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Satu kode aktif tidak boleh ambigu</text>
+<rect x="1112" y="888" width="280" height="44" rx="4" fill="#116a70"/>
+<text x="1126.00" y="915" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">Tambah master</text>
+<rect x="916" y="888" width="180" height="44" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="930.00" y="915" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Lihat perubahan</text>
+</svg>

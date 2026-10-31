@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc"><title id="title">Kontrak review sebelum konfirmasi stok</title><desc id="desc">Rancangan statis Inventory WMS. Semua angka, kode dan keadaan operasional merupakan data simulasi; kontrol tidak interaktif.</desc>
+<rect x="0" y="0" width="1600" height="1080" rx="0" fill="#f6f5f1"/>
+<rect x="0" y="0" width="1600" height="38" rx="0" fill="#29313c"/>
+<text x="24.00" y="25" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#ffffff">DESAIN STATIS / Data simulasi / Contoh komponen review penerimaan</text>
+<text x="48.00" y="107" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#29313c">Review yang menjelaskan dampak fisik</text>
+<text x="48.00" y="142" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Satu maksud bisnis, satu isi yang ditinjau. Perubahan aktual menuntut review baru.</text>
+<rect x="48" y="188" width="1016" height="808" rx="8" fill="#ffffff" stroke="#7f8996"/>
+<text x="80.00" y="241" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#29313c">Konfirmasi penerimaan</text>
+<text x="80.00" y="275" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">[Perusahaan] / [Gudang] / PO [SIM-PO-A]</text>
+<line x1="80" y1="308" x2="1032" y2="308" stroke="#dce1e7" stroke-width="1"/>
+<text x="80.00" y="352" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Barang</text>
+<text x="80.00" y="385" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">[SKU-A] · Produk A</text>
+<text x="556.00" y="352" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Lokasi tujuan</text>
+<text x="556.00" y="385" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">[SIM-RECEIVING]</text>
+<text x="80.00" y="464" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Aktual dan satuan</text>
+<text x="80.00" y="497" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">60 unit × faktor 1 = 60 unit dasar</text>
+<text x="556.00" y="464" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Kondisi awal</text>
+<text x="556.00" y="497" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Karantina jika QC diwajibkan</text>
+<text x="80.00" y="576" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Sisa dokumen</text>
+<text x="80.00" y="609" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">100 unit sebelum / 40 unit setelah</text>
+<text x="556.00" y="576" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Identitas wajib</text>
+<text x="556.00" y="609" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">[Batch / serial sesuai kebijakan barang]</text>
+<rect x="80" y="696" width="952" height="128" rx="6" fill="#f0f2f4"/>
+<text x="104.00" y="734" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Dampak setelah server mengesahkan</text>
+<text x="104.00" y="770" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#29313c">Receiving bertambah 60 unit. Sisa PO 40 unit tetap terbuka.</text>
+<text x="104.00" y="803" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Hasil WMS dan status ERP dilaporkan terpisah.</text>
+<line x1="80" y1="854" x2="1032" y2="854" stroke="#dce1e7" stroke-width="1"/>
+<rect x="80" y="882" width="240" height="44" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="94.00" y="909" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Kembali ubah aktual</text>
+<rect x="736" y="882" width="296" height="44" rx="4" fill="#116a70"/>
+<text x="750.00" y="909" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">Konfirmasi penerimaan</text>
+<text x="80.00" y="967" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">Contoh komponen S05. Tidak ada transaksi yang dikirim dari gambar ini.</text>
+<text x="1112.00" y="232" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#29313c">Kontrak perilaku</text>
+<text x="1112.00" y="283" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Sebelum kirim</text>
+<text x="1112.00" y="313" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Scope, barang, aktual, satuan dan tujuan harus terbaca.</text>
+<text x="1112.00" y="415" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Saat mengirim</text>
+<text x="1112.00" y="445" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Cegah klik ganda; jelaskan bahwa hasil sedang diperiksa.</text>
+<text x="1112.00" y="547" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Respons terputus</text>
+<text x="1112.00" y="577" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Tampilkan hasil belum pasti; periksa konfirmasi yang sama.</text>
+<text x="1112.00" y="679" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Keyboard</text>
+<text x="1112.00" y="709" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Fokus berada dalam dialog. Escape saat aman, lalu kembali ke</text>
+<text x="1112.00" y="732" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">pemicu.</text>
+<text x="1112.00" y="811" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Jika isi berubah</text>
+<text x="1112.00" y="841" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Kembali ke draf dan tinjau ulang. Jangan mengedit maksud</text>
+<text x="1112.00" y="864" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">unknown.</text>
+</svg>

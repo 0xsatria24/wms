@@ -1,0 +1,11 @@
+.git
+.tools
+.runtime
+**/node_modules
+**/dist
+**/bin
+**/obj
+design-system
+outputs
+.env
+**/TestResults

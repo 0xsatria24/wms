@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1400" viewBox="0 0 1600 1400" role="img" aria-labelledby="title desc"><title id="title">Fondasi desain Ledger Inventory WMS</title><desc id="desc">Rancangan statis Inventory WMS. Semua angka, kode dan keadaan operasional merupakan data simulasi; kontrol tidak interaktif.</desc>
+<rect x="0" y="0" width="1600" height="1400" rx="0" fill="#f6f5f1"/>
+<text x="48.00" y="50" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Inventory / WMS</text>
+<text x="1343.00" y="50" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="400" fill="#525d6b">29 Oktober 2026 / Rancangan statis</text>
+<text x="48.00" y="127" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" fill="#29313c">Ruang kerja yang mengikuti barang dan dokumen</text>
+<text x="48.00" y="163" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#525d6b">Fondasi visual dari referensi ERP, disesuaikan dengan aturan Inventory + WMS.</text>
+<text x="48.00" y="203" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">ENERGY 1 / RHYTHM 1 / MOTION 1 · Ledger · Tanpa logo atau ilustrasi referensi</text>
+<line x1="48" y1="232" x2="1552" y2="232" stroke="#dce1e7" stroke-width="1"/>
+<text x="48.00" y="283" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#29313c">01 / Warna dan peran</text>
+<rect x="48" y="310" width="228" height="84" rx="6" fill="#f6f5f1" stroke="#dce1e7"/>
+<text x="48.00" y="428" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Canvas</text>
+<text x="48.00" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">#F6F5F1</text>
+<rect x="300" y="310" width="228" height="84" rx="6" fill="#ffffff" stroke="#dce1e7"/>
+<text x="300.00" y="428" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Permukaan</text>
+<text x="300.00" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">#FFFFFF</text>
+<rect x="552" y="310" width="228" height="84" rx="6" fill="#29313c"/>
+<text x="552.00" y="428" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Teks</text>
+<text x="552.00" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">#29313C</text>
+<rect x="804" y="310" width="228" height="84" rx="6" fill="#116a70"/>
+<text x="804.00" y="428" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Aksi utama</text>
+<text x="804.00" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">#116A70</text>
+<rect x="1056" y="310" width="228" height="84" rx="6" fill="#80500e"/>
+<text x="1056.00" y="428" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Perhatian</text>
+<text x="1056.00" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">#80500E</text>
+<rect x="1308" y="310" width="228" height="84" rx="6" fill="#a0303d"/>
+<text x="1308.00" y="428" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Error</text>
+<text x="1308.00" y="453" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">#A0303D</text>
+<text x="48.00" y="513" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#29313c">02 / Tipografi dan angka</text>
+<text x="48.00" y="571" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="700" fill="#29313c">Penerimaan aktual</text>
+<text x="48.00" y="605" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Produk A · [SKU-A]</text>
+<text x="48.00" y="635" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Segoe UI / Label 14 / Isi 14 / Judul 24</text>
+<text x="48.00" y="676" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" fill="#29313c">Fisik 100 Komitmen 24 Bebas 76 unit</text>
+<text x="48.00" y="709" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Data simulasi. Satuan dan dimensi selalu menyertai angka.</text>
+<text x="840.00" y="513" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#29313c">03 / Kontrol dan batas</text>
+<text x="840.00" y="554" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Aktual diterima</text>
+<rect x="840" y="566" width="712" height="48" rx="4" fill="#ffffff" stroke="#156d89"/>
+<rect x="836" y="562" width="720" height="56" rx="5" fill="none" stroke="#156d89" stroke-width="3"/>
+<text x="852.00" y="594" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">[Isi aktual]</text>
+<rect x="840" y="653" width="252" height="44" rx="4" fill="#116a70"/>
+<text x="854.00" y="680" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#ffffff">Konfirmasi penerimaan</text>
+<rect x="1112" y="653" width="180" height="44" rx="4" fill="#ffffff" stroke="#7f8996"/>
+<text x="1126.00" y="680" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700" fill="#29313c">Ubah aktual</text>
+<text x="840.00" y="731" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">44px desktop / 52px scanner / fokus 3px + offset 3px</text>
+<line x1="48" y1="771" x2="1552" y2="771" stroke="#dce1e7" stroke-width="1"/>
+<text x="48.00" y="821" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#29313c">04 / Informasi yang tidak boleh bercampur</text>
+<text x="48.00" y="868" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Stok</text>
+<text x="48.00" y="903" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#525d6b">Fisik / komitmen / bebas</text>
+<text x="824.00" y="868" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Konfirmasi</text>
+<text x="824.00" y="903" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#525d6b">Pending / belum pasti / tercatat</text>
+<text x="48.00" y="976" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Identitas</text>
+<text x="48.00" y="1011" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#525d6b">Deteksi / posisi terkonfirmasi</text>
+<text x="824.00" y="976" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700" fill="#29313c">Integrasi</text>
+<text x="824.00" y="1011" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="400" fill="#525d6b">WMS tercatat / hasil ERP</text>
+<line x1="48" y1="1077" x2="1552" y2="1077" stroke="#dce1e7" stroke-width="1"/>
+<text x="48.00" y="1128" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#29313c">05 / Bentuk yang punya fungsi</text>
+<text x="48.00" y="1172" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Radius 4 / 6 / 8</text>
+<text x="48.00" y="1206" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Field, panel dan dialog dibedakan; permukaan normal datar.</text>
+<text x="840.00" y="1172" font-family="Segoe UI, Arial, sans-serif" font-size="18" font-weight="700" fill="#29313c">Lebar / menengah / sempit</text>
+<text x="840.00" y="1206" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="400" fill="#525d6b">Tabel perbandingan, pemilih tugas, lalu record vertikal pada scanner.</text>
+<text x="48.00" y="1328" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="400" fill="#525d6b">Acuan visual untuk ditinjau. Tidak ada implementasi aplikasi, data produksi atau hasil UAT pada paket ini.</text>
+</svg>

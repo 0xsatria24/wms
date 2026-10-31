@@ -1,0 +1,22 @@
+{
+  "kind": "simulation-only",
+  "asOf": "2026-10-29",
+  "dataThrough": "2026-10-28",
+  "company": "Demo Company",
+  "warehouse": "Main Warehouse",
+  "unit": "units",
+  "selectedProduct": {"sku": "SKU-A", "category": "General goods", "baseUnit": "units", "dimensions": null, "unitWeight": null, "image": null},
+  "rows": [
+    {"item": "Product A", "sku": "SKU-A", "location": "A-01", "condition": "good", "reserved": 24, "available": 76},
+    {"item": "Product B", "sku": "SKU-B", "location": "QC", "condition": "not-good", "reserved": 8, "available": 0, "hold": "quality-rejected"},
+    {"item": "Product C", "sku": "SKU-C", "location": "Staging", "condition": "good", "reserved": 8, "available": 0}
+  ],
+  "trend": {
+    "item": "SKU-A", "metric": "confirmed-shipped-units", "locations": "all-authorized",
+    "monthly2026ThroughCutoff": [80, 90, 100, 110, 100, 120, 110, 100, 120, 170],
+    "partialMonth": "2026-10",
+    "ytd": {"from": "2026-01-01", "through": "2026-10-28", "current": 1100, "priorSamePeriod": 1000, "changePercent": 10},
+    "mom": {"period": "2026-09", "current": 120, "comparisonPeriod": "2026-08", "comparison": 100, "changePercent": 20},
+    "yoy": {"period": "2026-09", "current": 120, "comparisonPeriod": "2025-09", "comparison": 96, "changePercent": 25}
+  }
+}
