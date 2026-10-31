@@ -16,9 +16,13 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         if (request.Type is "master" or "delete-master" or "packages" or "labelHistory" or "create-order")
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:catalog"}, 0))", ct);
+        if (request.Type is "create-user" or "delete-user" or "access")
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:users"}, 0))", ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({$"edit:demo:{request.Type}"}, 0))", ct);
         Require(await db.Principals.AnyAsync(u => u.Id == actor.Id && u.Status == "active", ct) && await db.AccessGrants.AnyAsync(g => g.PrincipalId == actor.Id && g.WarehouseId == actor.WarehouseId && g.Role == actor.Role, ct), "denied", 403);
         object? deletedItem = null;
+        object? userSnapshot = null;
+        string? userTargetId = null;
         if (request.Type == "master")
         {
             Supervisor(actor);
@@ -92,6 +96,47 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             };
             db.Items.Remove(item);
         }
+        else if (request.Type == "create-user")
+        {
+            Require(actor.Role == "admin", "denied", 403);
+            var name = p.Text("name").Trim();
+            var email = p.Text("email").Trim().ToLowerInvariant();
+            Require(name.Length is > 0 and < 200 && email.Length is > 3 and < 254 && System.Net.Mail.MailAddress.TryCreate(email, out var address) && address.Address == email, "required", 400);
+            Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
+            Require(!await db.Principals.AnyAsync(u => u.Email.ToLower() == email, ct), "user-duplicate", 409);
+            var id = Guid.NewGuid().ToString("N");
+            db.Principals.Add(new Principal { Id = id, Subject = $"request:{id}", Issuer = "access-request", Name = name, Email = email, Verified = false, Status = "pending" });
+            userTargetId = id;
+            userSnapshot = new
+            {
+                Name = name,
+                Email = email,
+                Status = "pending"
+            };
+        }
+        else if (request.Type == "delete-user")
+        {
+            Require(actor.Role == "admin", "denied", 403);
+            var id = p.Text("id");
+            Require(id != actor.Id, "self-user", 403);
+            Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
+            var target = await db.Principals.SingleOrDefaultAsync(u => u.Id == id, ct);
+            Require(target is not null, "source", 404);
+            Require(target!.Status != "deleted", "account-unavailable");
+            var grants = await db.AccessGrants.Where(g => g.PrincipalId == id).ToListAsync(ct);
+            var allowed = await db.AccessGrants.Where(g => g.PrincipalId == actor.Id && g.Role == "admin").Select(g => g.WarehouseId).ToArrayAsync(ct);
+            Require(grants.All(g => allowed.Contains(g.WarehouseId)), "user-scope", 403);
+            userTargetId = id;
+            userSnapshot = new
+            {
+                target.Name,
+                target.Email,
+                PreviousStatus = target.Status,
+                Grants = grants.Select(g => new { g.WarehouseId, g.Role }).ToArray()
+            };
+            target.Status = "deleted";
+            db.AccessGrants.RemoveRange(grants);
+        }
         else if (request.Type == "access")
         {
             Require(actor.Role == "admin", "denied", 403);
@@ -100,6 +145,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
             var target = await db.Principals.SingleOrDefaultAsync(u => u.Id == id, ct);
             Require(target is not null, "source", 404);
+            Require(target!.Status != "deleted", "account-unavailable");
             var status = p.Text("status");
             Require(status is "active" or "rejected" or "revoked", "required", 400);
             Require(status != "active" || target!.Verified, "email-verification", 400);
@@ -110,6 +156,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             Require(requested.Length > 0 && requested.All(name => allowed.Any(w => w.Name == name)), "scope", 403);
             target!.Status = status;
             var existingGrants = await db.AccessGrants.Where(g => g.PrincipalId == id).ToListAsync(ct);
+            Require(existingGrants.All(g => allowed.Any(w => w.Id == g.WarehouseId)), "user-scope", 403);
             var desired = requested.Select(name => allowed.Single(w => w.Name == name).Id).ToArray();
             foreach (var grant in existingGrants)
             {
@@ -178,7 +225,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
         }
         else
             throw new BusinessException("unsupported", 400);
-        db.Audit.Add(new AuditRecord { TransactionId = $"EDIT-{Guid.NewGuid():N}", WarehouseId = actor.WarehouseId, PrincipalId = actor.Id, Action = request.Type, DetailJson = JsonSerializer.Serialize(new { request.Type, Target = p.Text("id"), Sku = p.Text("sku"), Role = p.Text("role"), Status = p.Text("status"), Reason = p.Text("reason"), DeletedItem = deletedItem, Warehouses = p.TryGetProperty("warehouses", out var auditWarehouses) ? auditWarehouses : (JsonElement?)null }), PostedAt = DateTimeOffset.UtcNow });
+        db.Audit.Add(new AuditRecord { TransactionId = $"EDIT-{Guid.NewGuid():N}", WarehouseId = actor.WarehouseId, PrincipalId = actor.Id, Action = request.Type, DetailJson = JsonSerializer.Serialize(new { request.Type, Target = userTargetId ?? p.Text("id"), Sku = p.Text("sku"), Role = p.Text("role"), Status = p.Text("status"), Reason = p.Text("reason"), DeletedItem = deletedItem, User = userSnapshot, Warehouses = p.TryGetProperty("warehouses", out var auditWarehouses) ? auditWarehouses : (JsonElement?)null }), PostedAt = DateTimeOffset.UtcNow });
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
     }

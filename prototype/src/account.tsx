@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Cube } from "@phosphor-icons/react";
 import { MAIN } from "./fixtures";
-import { useText, Button, Field, Notice, Summary } from "./ui.tsx";
+import { useText, Button, Field, Notice, Summary, errorText } from "./ui.tsx";
 
 export function Auth({
   route,
@@ -55,10 +55,12 @@ export function Auth({
                   "Email or password is incorrect.",
                   "Email atau password belum benar.",
                 )
-              : t(
-                  "Unable to sign in. Check that the API and database are running.",
-                  "Belum bisa masuk. Pastikan API dan database sedang berjalan.",
-                ),
+              : error.code === "account-unavailable"
+                ? errorText(error.code, t)
+                : t(
+                    "Unable to sign in. Check that the API and database are running.",
+                    "Belum bisa masuk. Pastikan API dan database sedang berjalan.",
+                  ),
           );
         }
       } else if (route === "register") {

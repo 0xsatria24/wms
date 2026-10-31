@@ -23,6 +23,8 @@ Tema terang/gelap memakai peran warna yang sama. Panel16 dan kontrol8 mengikuti 
 
 Item master menyediakan **Delete item / Hapus barang** bagi admin dan supervisor. Pengguna meninjau nama/SKU dan mengisi alasan sebelum mengonfirmasi. Server menolak penghapusan barang yang mempunyai posisi stok, dokumen, kemasan atau riwayat label di gudang mana pun. Catatan audit penghapusan tetap disimpan. Gunakan status nonaktif untuk barang yang sudah digunakan.
 
+Panel admin menyediakan **Add user / Tambah user** pada header dan **Delete user / Hapus user** pada setiap baris. User baru masuk ke Menunggu persetujuan tanpa akses gudang. Dialog hapus meminta alasan dan menjelaskan pencabutan akses serta penyimpanan riwayat. Penghapusan akun sendiri dan target di luar kewenangan admin ditolak server. Pilihan bahasa kini tertulis **Bahasa Indonesia**. Fitur ini tidak membuat akun/password pada provider SSO atau mengirim email.
+
 `npm run test:pending` menguji kode antrean dan retry menggunakan fake-indexeddb dan server tiruan pada Node24. Uji ini memeriksa identitas, scope, versi, key, respons hilang, kegagalan server, akses dicabut serta pemulihan CSRF. Browser, perangkat fisik dan pemasangan PWA tetap memerlukan pemeriksaan tersendiri. Pengguna memilih penyelesaian kode dengan batas verifikasi pada 31 Oktober 2026; hasil visual akhir belum disahkan. Lihat [status verifikasi](../docs/implementation/verification.md).
 
 Tren SKU-A adalah fixture historis sampai 28 Oktober 2026; belum merupakan KPI perusahaan atau agregasi pengiriman produksi. Semua data pilot diberi label simulasi. Sumber kebutuhan tetap memiliki keputusan D01–D05/T01–T08 yang belum ditutup.

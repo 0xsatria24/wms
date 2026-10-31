@@ -3,6 +3,7 @@
 Implementasi pilot Inventory + WMS menggunakan **ASP.NET Core 10 + EF Core/Npgsql 10 + PostgreSQL 18 + React/TypeScript/Vite**, dengan modular monolith. UI mengikuti Clear Operations yang dipilih pada 29 Oktober 2026.
 
 - [Implementasi, cara menjalankan, cakupan dan batas verifikasi](docs/implementation/README.md)
+- [Tahap pengerjaan saat ini](docs/implementation/progress.md)
 - [Frontend dan sumber mockup aktif](prototype/README.md)
 - [Solusi .NET](InventoryWms.sln)
 - [Konfigurasi Docker Compose untuk server Linux](compose.yaml)

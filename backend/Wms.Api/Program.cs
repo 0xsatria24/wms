@@ -61,6 +61,7 @@ if (demo)
         var account = payload.Text("account");
         Rules.Require(account is "admin" or "operator" or "supervisor" && payload.Text("password") == "demo123", "credentials", 401);
         var principal = await db.Principals.SingleAsync(p => p.Id == account, ct);
+        Rules.Require(principal.Status == "active", "account-unavailable", 403);
         var claims = new[] { new Claim("sub", principal.Subject), new Claim("iss", principal.Issuer), new Claim("name", principal.Name) };
         await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
         return Results.NoContent();
@@ -71,14 +72,18 @@ app.MapGet("/auth/login", () => Results.Challenge(new AuthenticationProperties {
 app.MapPost("/api/logout", async (HttpContext context) => { await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme); return Results.NoContent(); });
 app.MapPost("/api/access/request", async (JsonElement payload, WmsDb db, CancellationToken ct) =>
 {
-    var email = payload.Text("email");
-    Rules.Require(email.Length is > 3 and < 254 && email.Contains('@') && payload.Text("name").Length is > 0 and < 200, "required", 400);
-    if (!await db.Principals.AnyAsync(p => p.Email == email, ct))
+    var email = payload.Text("email").Trim().ToLowerInvariant();
+    var name = payload.Text("name").Trim();
+    Rules.Require(email.Length is > 3 and < 254 && email.Contains('@') && name.Length is > 0 and < 200, "required", 400);
+    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:users"}, 0))", ct);
+    if (!await db.Principals.AnyAsync(p => p.Email.ToLower() == email, ct))
     {
         var id = Guid.NewGuid().ToString("N");
-        db.Principals.Add(new Principal { Id = id, Subject = $"request:{id}", Issuer = "access-request", Email = email, Name = payload.Text("name"), Status = "pending" });
+        db.Principals.Add(new Principal { Id = id, Subject = $"request:{id}", Issuer = "access-request", Email = email, Name = name, Status = "pending" });
         await db.SaveChangesAsync(ct);
     }
+    await transaction.CommitAsync(ct);
     return Results.Accepted(value: new
     {
         message = "request-received"
@@ -98,7 +103,18 @@ app.MapPost("/api/commands", async (CommandRequest request, HttpContext context,
     }, ct);
     return Results.Ok(result);
 }).RequireAuthorization();
-app.MapGet("/api/requests/{type}/{key}", async (string type, string key, string warehouse, HttpContext context, AccessService access, WmsDb db, CancellationToken ct) => { var actor = await access.Resolve(context.User, warehouse, ct); var scope = $"demo:{actor.Id}:{type}:{key}"; var result = await db.Requests.SingleOrDefaultAsync(r => r.ScopeKey == scope && r.WarehouseId == actor.WarehouseId, ct); return result is null ? Results.NotFound(new { code = "not-found" }) : Results.Content(result.ResultJson, "application/json"); }).RequireAuthorization();
+app.MapGet("/api/requests/{type}/{key}", async (string type, string key, string warehouse, HttpContext context, AccessService access, WmsDb db, CancellationToken ct) =>
+{
+    var actor = await access.Resolve(context.User, warehouse, ct);
+    var scope = $"demo:{actor.Id}:{type}:{key}";
+    var result = await db.Requests.SingleOrDefaultAsync(r => r.ScopeKey == scope && r.WarehouseId == actor.WarehouseId, ct);
+    return result is null
+        ? Results.NotFound(new
+        {
+            code = "not-found"
+        })
+        : Results.Ok(JsonSerializer.Deserialize<CommandResult>(result.ResultJson));
+}).RequireAuthorization();
 app.MapPost("/api/edit", async (EditRequest request, HttpContext context, AccessService access, EditService editor, CancellationToken ct) => { var actor = await access.Resolve(context.User, request.Warehouse, ct); await editor.Apply(actor, request, ct); return Results.NoContent(); }).RequireAuthorization();
 if (gatewayEnabled)
     app.MapPost("/api/rfid/observations", async (JsonElement payload, HttpContext context, AccessService access, WmsDb db, CancellationToken ct) =>

@@ -39,11 +39,13 @@ npm run build
 
 `test-local.ps1` memakai PostgreSQL18 lokal dengan database baru terisolasi per pengujian. Tanpa `WMS_TEST_ADMIN`, fixture xUnit menjalankan image PostgreSQL18 melalui Testcontainers dan memerlukan Docker. Hasil uji bukan UAT operasional. Lihat [status verifikasi](verification.md).
 
+Pengujian kontrak API ada di `backend/Wms.Tests/HttpApiTests.cs`, menggunakan [WebApplicationFactory dan TestServer ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0). Tes menjalankan pipeline aplikasi, cookie login dan CSRF asli dengan database PostgreSQL terisolasi. Transport HTTP berada dalam proses tes; koneksi PostgreSQL memakai server nyata. Middleware loopback hanya berada dalam host tes agar login demo mengikuti syarat alamat lokal. Pemeriksaan ini tidak menguji browser, Kestrel, TLS, reverse proxy, SSO perusahaan atau jaringan produksi.
+
 ## Alur dan cakupan fungsi
 
 | Fungsi | UI dan perilaku pilot |
 |---|---|
-| S01 | Login demo, request access dan contoh recovery; scope perusahaan/gudang; review peran dan approval akses; OIDC perusahaan perlu konfigurasi |
+| S01 | Login demo, request access dan contoh recovery; scope perusahaan/gudang; tambah user pending, review peran/approval dan hapus user dengan pencabutan akses serta audit; OIDC perusahaan perlu konfigurasi |
 | S02 | Master SKU, nama, barcode internal, faktor satuan, aktif/nonaktif, atribut opsional dan gambar; hapus barang yang belum digunakan dengan konfirmasi, alasan dan audit; definisi lokasi/satuan lokal perusahaan |
 | S03 | Filter/sort/pilih posisi, Dipesan/Tersedia tanpa kolom Fisik; spesifikasi dan fixture tren terpisah; saldo awal melalui dokumen |
 | S04 | Reservasi order released; validasi ulang jumlah/kelayakan di bawah lock; kekurangan tidak dialokasikan diam-diam |
@@ -68,6 +70,10 @@ npm run build
 Semua route mengikuti [app flow](../planning/03-app-flow.md) dan [suite desain](../../design-system/redesign-2026-10-29-v2/complete-suite/README.md). Contoh barang menggunakan satuan dasar unit. Barcode keyboard-wedge dapat mengisi field yang berfokus; perangkat fisik belum diuji. Tracking lot/serial/expiry, aturan presisi bisnis, approval final dan kebijakan parsial menunggu keputusan operasional. Toggle parsial adalah asumsi demo yang hanya boleh diubah admin pada Development.
 
 **Delete item / Hapus barang:** tersedia bagi admin dan supervisor di bagian tindakan form Item master. Dialog menampilkan barang/SKU, meminta alasan, dan menjelaskan bahwa penghapusan tidak dapat dibatalkan. Backend memeriksa akses terkini dan versi master, mengunci item, serta memeriksa referensi di semua gudang. Posisi stok, termasuk saldo nol, dokumen, kemasan atau riwayat label menghalangi penghapusan; barang tersebut dapat dinonaktifkan untuk penggunaan baru. Barang yang belum digunakan dihapus bersama pencatatan audit yang menyimpan identitas, nama, barcode, versi, pelaku dan alasan. Tidak ada endpoint untuk menghapus saldo atau ledger.
+
+**Admin, tambah dan hapus user:** tombol Add user / Tambah user berada di header Pengelolaan akses; Delete user / Hapus user berada pada tindakan setiap baris, termasuk permintaan pending. Penambahan meminta nama, email dan alasan, menyimpan user berstatus pending tanpa hak gudang, lalu membuka tab Menunggu persetujuan. Email dinormalisasi dan pengajuan bersamaan dengan email yang sama ditolak. Verifikasi dan approval tetap diperlukan. Fitur ini mengelola catatan akses aplikasi; tidak mengirim undangan, membuat password atau membuat identitas di provider SSO. Login demo tetap terbatas pada tiga akun contoh yang disebutkan di atas.
+
+Penghapusan meminta konfirmasi dan alasan, mengubah status user menjadi deleted, mencabut seluruh grant, dan menyembunyikannya dari daftar. Identitas dan riwayat transaksi/audit dipertahankan. Akun sendiri tidak dapat dihapus; admin harus berwenang atas seluruh gudang target. Review akses yang lama tidak dapat mengaktifkan kembali user terhapus, dan email tersebut tidak dapat digunakan untuk membuat identitas pengganti melalui Add user. Pemulihan akun belum disediakan di panel. Label pilihan bahasa adalah **Bahasa Indonesia**, tanpa tambahan dalam tanda kurung.
 
 Untuk menghentikan proses lokal milik proyek: `./scripts/stop-local.ps1`. Tambahkan `-StopDatabase` untuk menghentikan cluster pengembangan proyek. Skrip memeriksa PID dan command line sebelum menghentikan proses aplikasi. Skrip lokal ini khusus workspace Windows yang sudah memiliki SDK/dependensi dan cluster tersebut, bukan installer untuk komputer baru. Uji pending memakai Node24 dengan transformasi tipe eksperimental dan IndexedDB tiruan; ini bukan pengujian browser/PWA fisik.
 

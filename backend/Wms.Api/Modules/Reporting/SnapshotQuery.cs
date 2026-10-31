@@ -23,7 +23,7 @@ public sealed class SnapshotQuery(WmsDb db, AccessService access)
         var docIds = docs.Select(d => d.Id).ToArray();
         var allocations = await db.Allocations.Where(a => docIds.Contains(a.OrderId)).ToListAsync(ct);
         var records = await db.SupportingRecords.Where(r => r.CompanyId == "demo" && r.WarehouseId == actor.WarehouseId).ToListAsync(ct);
-        var users = await db.Principals.Where(p => actor.Role == "admin" || p.Id == actor.Id).ToListAsync(ct);
+        var users = await db.Principals.Where(p => p.Status != "deleted" && (actor.Role == "admin" || p.Id == actor.Id)).ToListAsync(ct);
         var userDtos = new List<object>();
         foreach (var user in users)
             userDtos.Add(await access.User(user, ct));

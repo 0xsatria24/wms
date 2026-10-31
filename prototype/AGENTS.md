@@ -15,3 +15,4 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - Inventory commands go through the .NET API. Client captures, RFID observations, pending requests and scan totals never authorize stock changes.
 - English is the default. Indonesian uses “Dipesan” for Reserved for orders. Product codes, document numbers and warehouse master names stay unchanged.
 - This full stack needs API, worker and PostgreSQL hosting. A static frontend-only Sites deployment would not host the backend.
+- Admin access management must include Add user and Delete user actions. New users follow pending verification/approval; deletion revokes access while preserving transaction/audit identity. The language option must read "Bahasa Indonesia", without "(santai)".

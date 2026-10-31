@@ -118,6 +118,29 @@ export async function requestAccess(name: string, email: string) {
   await session();
   await request("/api/access/request", { name, email });
 }
+export async function createUser(
+  warehouse: string,
+  name: string,
+  email: string,
+  reason: string,
+) {
+  await request("/api/edit", {
+    type: "create-user",
+    warehouse,
+    payload: { name, email, reason },
+  });
+}
+export async function deleteUser(
+  warehouse: string,
+  id: string,
+  reason: string,
+) {
+  await request("/api/edit", {
+    type: "delete-user",
+    warehouse,
+    payload: { id, reason },
+  });
+}
 export async function verifyDemoEmail(email: string) {
   await request("/api/dev/verify-email", { email });
 }

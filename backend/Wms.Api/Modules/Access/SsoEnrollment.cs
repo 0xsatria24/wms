@@ -27,6 +27,11 @@ public static class SsoEnrollment
         }
         var db = context.HttpContext.RequestServices.GetRequiredService<WmsDb>();
         var existing = await db.Principals.SingleOrDefaultAsync(p => p.Subject == subject && p.Issuer == issuer, context.HttpContext.RequestAborted);
+        if (existing?.Status == "deleted")
+        {
+            context.Fail("This account has been removed. Contact your access administrator.");
+            return;
+        }
         if (existing is null)
         {
             db.Principals.Add(new Principal { Id = Guid.NewGuid().ToString("N"), Subject = subject, Issuer = issuer, Name = principal.FindFirstValue("name") ?? "SSO account", Email = principal.FindFirstValue("email") ?? "", Verified = principal.FindFirstValue("email_verified") == "true", Status = "pending" });

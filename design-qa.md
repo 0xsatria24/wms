@@ -6,6 +6,8 @@ final result: blocked
 
 The user chose to finish the code and report verification limits after automatic browser-origin review timed out twice. Browser inspection was then stopped. This report does not approve the final visual design.
 
+Later code changes add admin Add user / Delete user dialogs and rename the language option to Bahasa Indonesia. Their browser-rendered appearance and keyboard interactions are not captured in the screenshots below; the result remains blocked.
+
 ## Source and evidence
 
 - Source visual truth: `design-system/redesign-2026-10-29-v2/revisions/01-stock-trends/stock-position-en.png`, 1448×1086 pixels. Auth source: `design-system/redesign-2026-10-29-v2/complete-suite/boards/05-components-responsive.png`. Other functions follow the 21 specs/boards in that suite.

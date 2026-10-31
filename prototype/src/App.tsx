@@ -173,11 +173,14 @@ function Application({ locale, setLocale }) {
           go("workspace");
         } else if (session.user)
           setNotice({
-            kind: "warning",
-            message: t(
-              "Your SSO identity is signed in. Warehouse access is awaiting administrator approval.",
-              "Identitas SSO sudah masuk. Akses gudang menunggu persetujuan admin.",
-            ),
+            kind: session.user.status === "pending" ? "warning" : "error",
+            message:
+              session.user.status === "pending"
+                ? t(
+                    "Your SSO identity is signed in. Warehouse access is awaiting administrator approval.",
+                    "Identitas SSO sudah masuk. Akses gudang menunggu persetujuan admin.",
+                  )
+                : errorText("account-unavailable", t),
           });
       })
       .catch(() =>
@@ -398,6 +401,28 @@ function Application({ locale, setLocale }) {
     patchDraft,
     checkPending,
     locale,
+    createUser: async (name: string, email: string, reason: string) => {
+      await api.createUser(warehouse, name, email, reason);
+      await refresh();
+      setNotice({
+        kind: "success",
+        message: t(
+          "User added to Pending approvals. Email verification and warehouse access approval are still required.",
+          "User ditambahkan ke Menunggu persetujuan. Verifikasi email dan persetujuan akses gudang tetap diperlukan.",
+        ),
+      });
+    },
+    deleteUser: async (id: string, reason: string) => {
+      await api.deleteUser(warehouse, id, reason);
+      await refresh();
+      setNotice({
+        kind: "success",
+        message: t(
+          "User deleted and warehouse access removed. Transaction and audit history is retained.",
+          "User dihapus dan akses gudang dicabut. Riwayat transaksi dan audit tetap tersimpan.",
+        ),
+      });
+    },
     deleteItem: async (sku: string, version: number, reason: string) => {
       await api.deleteItem(warehouse, sku, version, reason);
       await refresh();
@@ -414,7 +439,7 @@ function Application({ locale, setLocale }) {
     <Field label={t("Language", "Bahasa")}>
       <select value={locale} onChange={(e) => setLocale(e.target.value)}>
         <option value="en">English</option>
-        <option value="id">Bahasa Indonesia (santai)</option>
+        <option value="id">Bahasa Indonesia</option>
       </select>
     </Field>
   );

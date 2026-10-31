@@ -17,13 +17,19 @@ import {
 } from "./ui.tsx";
 export { Controls } from "./controls.tsx";
 
-export function Access({ data, setData, user, flash }) {
+export function Access({ data, setData, user, flash, createUser, deleteUser }) {
   const t = useText();
   const [tab, setTab] = useState("users");
   const [selected, setSelected] = useState(null);
   const [role, setRole] = useState("operator");
   const [warehouses, setWarehouses] = useState([MAIN]);
   const [reason, setReason] = useState("");
+  const [userAction, setUserAction] = useState(null);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [actionReason, setActionReason] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
   if (user.role !== "admin")
     return (
       <Panel>
@@ -36,8 +42,17 @@ export function Access({ data, setData, user, flash }) {
       </Panel>
     );
   const rows = data.users.filter((u) =>
-    tab === "users" ? u.status === "active" : u.status === "pending",
+    tab === "users"
+      ? !["pending", "deleted"].includes(u.status)
+      : u.status === "pending",
   );
+  const startUserAction = (target = null) => {
+    setUserAction({ target });
+    setNewName("");
+    setNewEmail("");
+    setActionReason("");
+    setActionError("");
+  };
   const open = (u) => {
     setSelected(u);
     setRole(u.role);
@@ -91,7 +106,15 @@ export function Access({ data, setData, user, flash }) {
     );
   };
   return (
-    <Panel title={t("Access management", "Pengelolaan akses")}>
+    <Panel
+      title={t("Access management", "Pengelolaan akses")}
+      action={
+        <Button primary onClick={() => startUserAction()}>
+          <Plus size={18} aria-hidden="true" />
+          {t("Add user", "Tambah user")}
+        </Button>
+      }
+    >
       <Tabs
         label={t("User lists", "Daftar pengguna")}
         value={tab}
@@ -110,10 +133,14 @@ export function Access({ data, setData, user, flash }) {
       <DataTable
         label={t("Users and warehouse access", "Pengguna dan akses gudang")}
         rows={rows}
-        empty={t(
-          "No access requests waiting.",
-          "Tidak ada permintaan akses yang menunggu.",
-        )}
+        empty={
+          tab === "users"
+            ? t("No users yet.", "Belum ada user.")
+            : t(
+                "No access requests waiting.",
+                "Tidak ada permintaan akses yang menunggu.",
+              )
+        }
         columns={[
           { key: "name", label: t("Name", "Nama") },
           { key: "email", label: t("Work email", "Email kerja") },
@@ -134,9 +161,13 @@ export function Access({ data, setData, user, flash }) {
               <Tag kind={u.status === "active" ? "success" : "warning"}>
                 {u.status === "active"
                   ? t("Active", "Aktif")
-                  : u.verified
-                    ? t("Awaiting approval", "Menunggu persetujuan")
-                    : t("Email not verified", "Email belum diverifikasi")}
+                  : u.status === "revoked"
+                    ? t("Access revoked", "Akses dicabut")
+                    : u.status === "rejected"
+                      ? t("Request rejected", "Permintaan ditolak")
+                      : u.verified
+                        ? t("Awaiting approval", "Menunggu persetujuan")
+                        : t("Email not verified", "Email belum diverifikasi")}
               </Tag>
             ),
           },
@@ -144,9 +175,22 @@ export function Access({ data, setData, user, flash }) {
             key: "actions",
             label: t("Actions", "Tindakan"),
             render: (u) => (
-              <Button disabled={u.id === user.id} onClick={() => open(u)}>
-                {t("Review access", "Tinjau akses")}
-              </Button>
+              <div className="user-actions">
+                <Button
+                  disabled={u.id === user.id || actionBusy}
+                  onClick={() => open(u)}
+                >
+                  {t("Review access", "Tinjau akses")}
+                </Button>
+                <Button
+                  danger
+                  disabled={u.id === user.id || actionBusy}
+                  onClick={() => startUserAction(u)}
+                >
+                  <Trash size={18} aria-hidden="true" />
+                  {t("Delete user", "Hapus user")}
+                </Button>
+              </div>
             ),
           },
         ]}
@@ -155,6 +199,10 @@ export function Access({ data, setData, user, flash }) {
         {t(
           "Registration requests access; it does not grant an administrator role. Production authorization is not connected in this preview.",
           "Pendaftaran mengajukan akses; tidak memberikan peran admin. Otorisasi produksi belum terhubung pada preview ini.",
+        )}{" "}
+        {t(
+          "You cannot delete your own account.",
+          "Kamu tidak bisa menghapus akun sendiri.",
         )}
       </Notice>
       {selected && (
@@ -242,6 +290,116 @@ export function Access({ data, setData, user, flash }) {
               </Notice>
             )}
           </div>
+        </Modal>
+      )}
+      {userAction && (
+        <Modal
+          title={
+            userAction.target
+              ? t("Delete user", "Hapus user")
+              : t("Add user", "Tambah user")
+          }
+          onClose={() => !actionBusy && setUserAction(null)}
+        >
+          <form
+            className="stack"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (actionBusy || !actionReason.trim()) return;
+              setActionBusy(true);
+              setActionError("");
+              try {
+                if (userAction.target)
+                  await deleteUser(userAction.target.id, actionReason.trim());
+                else {
+                  await createUser(
+                    newName.trim(),
+                    newEmail.trim(),
+                    actionReason.trim(),
+                  );
+                  setTab("pending");
+                }
+                setUserAction(null);
+              } catch (error) {
+                setActionError(errorText(error.message, t));
+              } finally {
+                setActionBusy(false);
+              }
+            }}
+          >
+            {userAction.target ? (
+              <>
+                <Summary
+                  items={[
+                    [t("Name", "Nama"), userAction.target.name],
+                    [t("Work email", "Email kerja"), userAction.target.email],
+                    [
+                      t("Warehouse access", "Akses gudang"),
+                      userAction.target.warehouses.join(", ") ||
+                        t("None", "Belum ada"),
+                    ],
+                  ]}
+                />
+                <Notice kind="warning">
+                  {t(
+                    "This user will disappear from the user list and lose all warehouse access. Their identity remains in transaction and audit history. This action cannot be undone from this panel.",
+                    "User akan dihapus dari daftar dan kehilangan seluruh akses gudang. Identitasnya tetap tersimpan di riwayat transaksi dan audit. Tindakan ini tidak bisa dibatalkan dari panel ini.",
+                  )}
+                </Notice>
+              </>
+            ) : (
+              <>
+                <Field
+                  label={t("Full name (required)", "Nama lengkap (wajib)")}
+                  required
+                  maxLength={199}
+                  value={newName}
+                  disabled={actionBusy}
+                  onChange={(event) => setNewName(event.target.value)}
+                />
+                <Field
+                  label={t("Work email (required)", "Email kerja (wajib)")}
+                  required
+                  type="email"
+                  maxLength={253}
+                  value={newEmail}
+                  disabled={actionBusy}
+                  onChange={(event) => setNewEmail(event.target.value)}
+                />
+                <Notice>
+                  {t(
+                    "New users enter Pending approvals. Email verification and administrator review are required before warehouse access is granted. This action does not send an email.",
+                    "User baru masuk ke Menunggu persetujuan. Verifikasi email dan tinjauan admin diperlukan sebelum akses gudang diberikan. Tindakan ini tidak mengirim email.",
+                  )}
+                </Notice>
+              </>
+            )}
+            <Field
+              label={t("Reason (required)", "Alasan (wajib)")}
+              required
+              value={actionReason}
+              disabled={actionBusy}
+              onChange={(event) => setActionReason(event.target.value)}
+            />
+            {actionError && <Notice kind="error">{actionError}</Notice>}
+            <div className="form-actions">
+              <Button disabled={actionBusy} onClick={() => setUserAction(null)}>
+                {t("Cancel", "Batal")}
+              </Button>
+              <Button
+                type="submit"
+                primary={!userAction.target}
+                danger={!!userAction.target}
+                disabled={actionBusy || !actionReason.trim()}
+              >
+                {actionBusy
+                  ? t("Saving…", "Lagi menyimpan…")
+                  : userAction.target
+                    ? t("Delete user", "Hapus user")
+                    : t("Add user", "Tambah user")}
+              </Button>
+            </div>
+          </form>
         </Modal>
       )}
     </Panel>

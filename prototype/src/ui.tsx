@@ -363,6 +363,22 @@ export function DownloadButton({ filename, rows, children }) {
 }
 export function errorText(code, t) {
   const messages = {
+    "user-duplicate": [
+      "This email is already registered. Use a different email or contact your access administrator.",
+      "Email ini sudah terdaftar. Gunakan email lain atau hubungi pengelola akses.",
+    ],
+    "self-user": [
+      "You cannot delete your own account.",
+      "Kamu tidak bisa menghapus akun sendiri.",
+    ],
+    "user-scope": [
+      "This user has access to a warehouse you do not administer. Ask an administrator responsible for all of their warehouses.",
+      "User ini memiliki akses ke gudang di luar kewenangan admin kamu. Hubungi admin yang mengelola seluruh gudangnya.",
+    ],
+    "account-unavailable": [
+      "This account is no longer available. Contact your access administrator.",
+      "Akun ini sudah tidak tersedia. Hubungi pengelola akses.",
+    ],
     "item-in-use": [
       "This item is used by stock, documents, packaging or labels. Deactivate it to stop new use while keeping its history.",
       "Barang sudah dipakai di stok, dokumen, kemasan, atau label. Nonaktifkan agar tidak dipakai untuk dokumen baru dan riwayatnya tetap tersimpan.",
