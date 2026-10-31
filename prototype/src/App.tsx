@@ -490,10 +490,8 @@ function Application({ locale, setLocale }) {
             ].map(([group, title]) => (
               <details
                 key={group}
-                open={
-                  ["inventory", "inbound"].includes(group) ||
-                  screen?.[6] === group
-                }
+                open={screen?.[6] === group}
+                name="workspace-navigation"
               >
                 <summary>
                   {title}

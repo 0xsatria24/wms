@@ -1,5 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { Plus, Trash } from "@phosphor-icons/react";
+import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  Plus,
+  Trash,
+  MagnifyingGlass,
+  CaretLeft,
+  CaretRight,
+  PencilSimple,
+} from "@phosphor-icons/react";
+import { itemCatalogPage } from "./item-catalog";
 import { MAIN, SECONDARY, locations } from "./fixtures";
 import {
   useText,
@@ -13,6 +21,7 @@ import {
   Summary,
   Tabs,
   Thumb,
+  ProductName,
   errorText,
 } from "./ui.tsx";
 export { Controls } from "./controls.tsx";
@@ -420,13 +429,54 @@ export function Master({ data, setData, user, flash, deleteItem }) {
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [status, setStatus] = useState("");
+  const [category, setCategory] = useState("");
+  const [sort, setSort] = useState("name");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const catalogue = useMemo(
+    () =>
+      itemCatalogPage(data.products, {
+        query: deferredQuery,
+        status,
+        category,
+        sort,
+        page,
+        pageSize,
+      }),
+    [data.products, deferredQuery, status, category, sort, page, pageSize],
+  );
+  const categories = useMemo(
+    () =>
+      [
+        ...new Set<string>(
+          data.products.map((p) => p.category).filter(Boolean),
+        ),
+      ].sort(),
+    [data.products],
+  );
+  const closeEditor = () => {
+    if (saving || deleteBusy) return;
+    const dirty = selected
+      ? JSON.stringify(form) !== JSON.stringify(selected)
+      : !!(form?.name || form?.sku || form?.barcode);
+    if (dirty) setDiscarding(true);
+    else setEditorOpen(false);
+  };
   useEffect(() => {
-    if (selected) setForm(selected);
     setError("");
-  }, [sku, selected]);
+  }, [sku]);
+  const hasChanges = selected
+    ? JSON.stringify(form) !== JSON.stringify(selected)
+    : !!(form?.name || form?.sku || form?.barcode);
   const change = (key) => (e) => setForm({ ...form, [key]: e.target.value });
   const canEdit = ["admin", "supervisor"].includes(user.role);
-  const save = (e) => {
+  const save = async (e) => {
     e.preventDefault();
     setError("");
     if (
@@ -452,7 +502,8 @@ export function Master({ data, setData, user, flash, deleteItem }) {
       );
       return;
     }
-    setData((s) => ({
+    setSaving(true);
+    const saved = await setData((s) => ({
       ...s,
       products: s.products.some((p) => p.sku === sku)
         ? s.products.map((p) =>
@@ -471,7 +522,24 @@ export function Master({ data, setData, user, flash, deleteItem }) {
         ...s.audit,
       ],
     }));
+    setSaving(false);
+    if (!saved) {
+      setError(
+        t(
+          "The item could not be saved. Your changes are still here; check the values and try again.",
+          "Barang belum bisa disimpan. Perubahan tetap ada; periksa isian lalu coba lagi.",
+        ),
+      );
+      return;
+    }
+    if (!selected) {
+      setQuery(form.sku);
+      setStatus("");
+      setCategory("");
+      setPage(1);
+    }
     setSku(form.sku);
+    setEditorOpen(false);
     flash(
       t(
         "Item master saved. No stock quantity changed.",
@@ -496,23 +564,20 @@ export function Master({ data, setData, user, flash, deleteItem }) {
         ]}
       />
       {tab === "items" ? (
-        <div className="master-grid">
-          <aside className="item-list">
-            <h3>{t("Items", "Barang")}</h3>
-            {data.products.map((p) => (
-              <button
-                key={p.sku}
-                className={`queue-item ${sku === p.sku ? "selected" : ""}`}
-                aria-pressed={sku === p.sku}
-                onClick={() => setSku(p.sku)}
-              >
-                <strong>{p.name}</strong>
-                <span>{p.sku}</span>
-                {!p.active && <small>{t("Inactive", "Nonaktif")}</small>}
-              </button>
-            ))}
+        <>
+          <div className="catalogue-heading">
+            <div>
+              <h3>{t("Item catalogue", "Katalog barang")}</h3>
+              <p className="muted">
+                {t(
+                  "Find an item, then open its details to make changes.",
+                  "Cari barang, lalu buka detailnya untuk mengubah data.",
+                )}
+              </p>
+            </div>
             {canEdit && (
               <Button
+                primary
                 onClick={() => {
                   setSku("");
                   setForm({
@@ -527,160 +592,371 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                     dimensions: "",
                     weight: "",
                   });
+                  setEditorOpen(true);
+                  setError("");
                 }}
               >
                 <Plus size={18} />
                 {t("Add item", "Tambah barang")}
               </Button>
             )}
-          </aside>
-          {form && (
-            <form className="stack" onSubmit={save}>
-              <h2>{form.name || t("New item", "Barang baru")}</h2>
-              {error && <Notice kind="error">{error}</Notice>}
-              <fieldset disabled={!canEdit}>
-                <div className="form-grid">
-                  <Field
-                    label={t("Item name (required)", "Nama barang (wajib)")}
-                    value={form.name}
-                    required
-                    onChange={change("name")}
-                  />
-                  <Field
-                    label="SKU"
-                    value={form.sku}
-                    required
-                    readOnly={!!selected}
-                    onChange={change("sku")}
-                  />
-                  <Field
-                    label={t("Category", "Kategori")}
-                    value={form.category}
-                    onChange={change("category")}
-                  />
-                  <Field
-                    label={t("Base unit", "Satuan dasar")}
-                    value={form.unit}
-                    readOnly={!!selected}
-                    onChange={change("unit")}
-                  />
-                  <Field
-                    label={t("Conversion factor", "Faktor konversi")}
-                    value={form.factor}
-                    type="number"
-                    min="0.0001"
-                    step="any"
-                    required
-                    onChange={change("factor")}
-                  />
-                  <Field
-                    label={t("Dimensions (optional)", "Dimensi (opsional)")}
-                    value={form.dimensions}
-                    onChange={change("dimensions")}
-                  />
-                  <Field
-                    label={t(
-                      "Unit weight (optional)",
-                      "Berat satuan (opsional)",
-                    )}
-                    value={form.weight}
-                    onChange={change("weight")}
-                  />
-                  <Field
-                    label={t(
-                      "Barcode value (internal namespace)",
-                      "Nilai barcode (namespace internal)",
-                    )}
-                    value={form.barcode}
-                    required
-                    onChange={change("barcode")}
-                  />
-                </div>
-                {selected && selected.barcode !== form.barcode && (
-                  <Field
-                    label={t(
-                      "Identifier change reason (required)",
-                      "Alasan perubahan kode (wajib)",
-                    )}
-                    value={form.reason || ""}
-                    required
-                    onChange={change("reason")}
-                  />
+          </div>
+          <div className="catalogue-toolbar">
+            <div className="search">
+              <MagnifyingGlass size={20} aria-hidden="true" />
+              <Field
+                label={t("Search items", "Cari barang")}
+                type="search"
+                value={query}
+                placeholder={t(
+                  "Search name, SKU or barcode…",
+                  "Cari nama, SKU, atau barcode…",
                 )}
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={form.active}
-                    onChange={(e) =>
-                      setForm({ ...form, active: e.target.checked })
-                    }
-                  />
-                  {t("Active for new documents", "Aktif untuk dokumen baru")}
-                </label>
-                {!form.active && (
-                  <Field
-                    label={t(
-                      "Deactivation reason (required)",
-                      "Alasan nonaktif (wajib)",
-                    )}
-                    required
-                    value={form.reason || ""}
-                    onChange={change("reason")}
-                  />
-                )}
-              </fieldset>
-              <div className="image-master">
-                <Thumb large product={form} />
-                <div>
-                  <strong>
-                    {t("Optional item image", "Gambar barang opsional")}
-                  </strong>
-                  <p className="muted">
-                    {t(
-                      "Manage the image in the stock detail panel.",
-                      "Kelola gambar di panel detail stok.",
-                    )}
-                  </p>
-                  <a href="#stock">
-                    {t("Open stock detail", "Buka detail stok")}
-                  </a>
-                </div>
-              </div>
-              <Notice>
-                {t(
-                  "Leading zeros are preserved. Internal identifiers are not official GTINs. Master changes do not rewrite transaction history.",
-                  "Nol depan dipertahankan. Kode internal bukan GTIN resmi. Perubahan master tidak menulis ulang riwayat transaksi.",
-                )}
-              </Notice>
-              {canEdit && (
-                <div className="form-actions">
-                  {selected && (
-                    <Button
-                      danger
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setPage(1);
+                }}
+              />
+            </div>
+            <Field label={t("Status", "Status")}>
+              <select
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">{t("All statuses", "Semua status")}</option>
+                <option value="active">{t("Active", "Aktif")}</option>
+                <option value="inactive">{t("Inactive", "Nonaktif")}</option>
+              </select>
+            </Field>
+            <Field label={t("Category", "Kategori")}>
+              <select
+                value={category}
+                onChange={(event) => {
+                  setCategory(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">
+                  {t("All categories", "Semua kategori")}
+                </option>
+                {categories.map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t("Sort by", "Urutkan")}>
+              <select
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="name">{t("Name A–Z", "Nama A–Z")}</option>
+                <option value="name-desc">{t("Name Z–A", "Nama Z–A")}</option>
+                <option value="sku">SKU</option>
+              </select>
+            </Field>
+          </div>
+          <div className="catalogue-results" role="status">
+            <span>
+              {t(
+                `${catalogue.total} of ${data.products.length} items`,
+                `${catalogue.total} dari ${data.products.length} barang`,
+              )}
+            </span>
+            {(query || status || category) && (
+              <Button
+                onClick={() => {
+                  setQuery("");
+                  setStatus("");
+                  setCategory("");
+                  setPage(1);
+                }}
+              >
+                {t("Clear filters", "Hapus filter")}
+              </Button>
+            )}
+          </div>
+          <div className="catalogue-table" aria-busy={query !== deferredQuery}>
+            <DataTable
+              label={t("Item catalogue", "Katalog barang")}
+              rows={catalogue.rows.map((p) => ({ ...p, id: p.sku }))}
+              empty={t(
+                "No items match these filters.",
+                "Tidak ada barang yang cocok dengan filter ini.",
+              )}
+              columns={[
+                {
+                  key: "name",
+                  label: t("Item / SKU", "Barang / SKU"),
+                  render: (p) => (
+                    <button
+                      className="row-select"
                       onClick={() => {
-                        setDeleting({ ...selected });
-                        setDeleteReason("");
-                        setDeleteError("");
+                        setSku(p.sku);
+                        const { id, ...item } = p;
+                        setForm(item);
+                        setEditorOpen(true);
                       }}
                     >
-                      <Trash size={18} aria-hidden="true" />
-                      {t("Delete item", "Hapus barang")}
+                      <ProductName product={p} />
+                    </button>
+                  ),
+                },
+                { key: "barcode", label: t("Barcode", "Barcode") },
+                { key: "category", label: t("Category", "Kategori") },
+                { key: "unit", label: t("Base unit", "Satuan dasar") },
+                {
+                  key: "active",
+                  label: t("Status", "Status"),
+                  render: (p) => (
+                    <Tag kind={p.active ? "success" : "neutral"}>
+                      {p.active
+                        ? t("Active", "Aktif")
+                        : t("Inactive", "Nonaktif")}
+                    </Tag>
+                  ),
+                },
+                {
+                  key: "actions",
+                  label: t("Actions", "Tindakan"),
+                  render: (p) => (
+                    <Button
+                      aria-label={t(
+                        `${canEdit ? "Edit" : "View"} ${p.name} (${p.sku})`,
+                        `${canEdit ? "Ubah" : "Lihat"} ${p.name} (${p.sku})`,
+                      )}
+                      onClick={() => {
+                        setSku(p.sku);
+                        const { id, ...item } = p;
+                        setForm(item);
+                        setEditorOpen(true);
+                      }}
+                    >
+                      <PencilSimple size={18} aria-hidden="true" />
+                      {canEdit ? t("Edit", "Ubah") : t("View", "Lihat")}
                     </Button>
-                  )}
-                  <Button
-                    onClick={() => setForm(selected)}
-                    disabled={!selected}
-                  >
-                    {t("Discard edits", "Batalkan perubahan")}
-                  </Button>
-                  <Button primary type="submit">
-                    {t("Save changes", "Simpan perubahan")}
-                  </Button>
-                </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+          <div className="catalogue-pagination">
+            <span>
+              {t(
+                `Showing ${catalogue.from}–${catalogue.to} of ${catalogue.total}`,
+                `Menampilkan ${catalogue.from}–${catalogue.to} dari ${catalogue.total}`,
               )}
-            </form>
+            </span>
+            <Field label={t("Rows per page", "Baris per halaman")}>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value));
+                  setPage(1);
+                }}
+              >
+                {[10, 25, 50].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <nav aria-label={t("Catalogue pages", "Halaman katalog")}>
+              <Button
+                aria-label={t(
+                  "Previous catalogue page",
+                  "Halaman katalog sebelumnya",
+                )}
+                disabled={catalogue.page === 1}
+                onClick={() => setPage(catalogue.page - 1)}
+              >
+                <CaretLeft size={18} />
+              </Button>
+              <span>
+                {t(
+                  `Page ${catalogue.page} of ${catalogue.pages}`,
+                  `Halaman ${catalogue.page} dari ${catalogue.pages}`,
+                )}
+              </span>
+              <Button
+                aria-label={t(
+                  "Next catalogue page",
+                  "Halaman katalog berikutnya",
+                )}
+                disabled={catalogue.page === catalogue.pages}
+                onClick={() => setPage(catalogue.page + 1)}
+              >
+                <CaretRight size={18} />
+              </Button>
+            </nav>
+          </div>
+          {editorOpen && form && (
+            <Modal
+              className="catalogue-editor"
+              title={
+                selected
+                  ? t("Item details", "Detail barang")
+                  : t("Add item", "Tambah barang")
+              }
+              onClose={closeEditor}
+            >
+              <form className="stack" onSubmit={save}>
+                <h2>{form.name || t("New item", "Barang baru")}</h2>
+                {error && <Notice kind="error">{error}</Notice>}
+                <fieldset disabled={!canEdit || saving}>
+                  <div className="form-grid">
+                    <Field
+                      label={t("Item name (required)", "Nama barang (wajib)")}
+                      value={form.name}
+                      required
+                      onChange={change("name")}
+                    />
+                    <Field
+                      label="SKU"
+                      value={form.sku}
+                      required
+                      readOnly={!!selected}
+                      onChange={change("sku")}
+                    />
+                    <Field
+                      label={t("Category", "Kategori")}
+                      value={form.category}
+                      onChange={change("category")}
+                    />
+                    <Field
+                      label={t("Base unit", "Satuan dasar")}
+                      value={form.unit}
+                      readOnly={!!selected}
+                      onChange={change("unit")}
+                    />
+                    <Field
+                      label={t("Conversion factor", "Faktor konversi")}
+                      value={form.factor}
+                      type="number"
+                      min="0.0001"
+                      step="any"
+                      required
+                      onChange={change("factor")}
+                    />
+                    <Field
+                      label={t("Dimensions (optional)", "Dimensi (opsional)")}
+                      value={form.dimensions}
+                      onChange={change("dimensions")}
+                    />
+                    <Field
+                      label={t(
+                        "Unit weight (optional)",
+                        "Berat satuan (opsional)",
+                      )}
+                      value={form.weight}
+                      onChange={change("weight")}
+                    />
+                    <Field
+                      label={t(
+                        "Barcode value (internal namespace)",
+                        "Nilai barcode (namespace internal)",
+                      )}
+                      value={form.barcode}
+                      required
+                      onChange={change("barcode")}
+                    />
+                  </div>
+                  {selected && selected.barcode !== form.barcode && (
+                    <Field
+                      label={t(
+                        "Identifier change reason (required)",
+                        "Alasan perubahan kode (wajib)",
+                      )}
+                      value={form.reason || ""}
+                      required
+                      onChange={change("reason")}
+                    />
+                  )}
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={form.active}
+                      onChange={(e) =>
+                        setForm({ ...form, active: e.target.checked })
+                      }
+                    />
+                    {t("Active for new documents", "Aktif untuk dokumen baru")}
+                  </label>
+                  {!form.active && (
+                    <Field
+                      label={t(
+                        "Deactivation reason (required)",
+                        "Alasan nonaktif (wajib)",
+                      )}
+                      required
+                      value={form.reason || ""}
+                      onChange={change("reason")}
+                    />
+                  )}
+                </fieldset>
+                <div className="image-master">
+                  <Thumb large product={form} />
+                  <div>
+                    <strong>
+                      {t("Optional item image", "Gambar barang opsional")}
+                    </strong>
+                    <p className="muted">
+                      {t(
+                        "Manage the image in the stock detail panel.",
+                        "Kelola gambar di panel detail stok.",
+                      )}
+                    </p>
+                    <a href="#stock">
+                      {t("Open stock detail", "Buka detail stok")}
+                    </a>
+                  </div>
+                </div>
+                <Notice>
+                  {t(
+                    "Leading zeros are preserved. Internal identifiers are not official GTINs. Master changes do not rewrite transaction history.",
+                    "Nol depan dipertahankan. Kode internal bukan GTIN resmi. Perubahan master tidak menulis ulang riwayat transaksi.",
+                  )}
+                </Notice>
+                {canEdit && (
+                  <div className="form-actions">
+                    {selected && (
+                      <Button
+                        danger
+                        disabled={saving}
+                        onClick={() => {
+                          setDeleting({ ...selected });
+                          setDeleteReason("");
+                          setDeleteError("");
+                        }}
+                      >
+                        <Trash size={18} aria-hidden="true" />
+                        {t("Delete item", "Hapus barang")}
+                      </Button>
+                    )}
+                    <Button onClick={closeEditor} disabled={saving}>
+                      {t("Cancel", "Batal")}
+                    </Button>
+                    <Button
+                      primary
+                      type="submit"
+                      disabled={saving || !hasChanges}
+                    >
+                      {saving
+                        ? t("Saving…", "Lagi menyimpan…")
+                        : t("Save changes", "Simpan perubahan")}
+                    </Button>
+                  </div>
+                )}
+              </form>
+            </Modal>
           )}
-        </div>
+        </>
       ) : (
         <>
           <div className="section-actions">
@@ -728,6 +1004,39 @@ export function Master({ data, setData, user, flash, deleteItem }) {
           </Notice>
         </>
       )}
+      {discarding && (
+        <Modal
+          title={t(
+            "Discard unsaved changes?",
+            "Batalkan perubahan yang belum disimpan?",
+          )}
+          onClose={() => setDiscarding(false)}
+          footer={
+            <>
+              <Button onClick={() => setDiscarding(false)}>
+                {t("Keep editing", "Lanjutkan mengubah")}
+              </Button>
+              <Button
+                danger
+                onClick={() => {
+                  setDiscarding(false);
+                  setEditorOpen(false);
+                  setForm(selected);
+                }}
+              >
+                {t("Discard changes", "Batalkan perubahan")}
+              </Button>
+            </>
+          }
+        >
+          <p>
+            {t(
+              "Your saved item stays unchanged. Only this unsaved draft will be discarded.",
+              "Barang yang tersimpan tetap sama. Hanya draf yang belum disimpan ini yang akan dibuang.",
+            )}
+          </p>
+        </Modal>
+      )}
       {deleting && (
         <Modal
           title={t("Delete item", "Hapus barang")}
@@ -752,6 +1061,7 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                 setSku(next?.sku || "");
                 setForm(next || null);
                 setDeleting(null);
+                setEditorOpen(false);
               } catch (error) {
                 setDeleteError(errorText(error.message, t));
               } finally {

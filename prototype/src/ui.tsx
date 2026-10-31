@@ -300,11 +300,13 @@ export function Modal({
   children,
   onClose,
   footer,
+  className = "",
 }: {
   title: React.ReactNode;
   children?: React.ReactNode;
   onClose: () => void;
   footer?: React.ReactNode;
+  className?: string;
 }) {
   const t = useText();
   const ref = useRef<HTMLDialogElement>(null);
@@ -318,6 +320,7 @@ export function Modal({
   }, []);
   return (
     <dialog
+      className={className}
       ref={ref}
       aria-labelledby={id}
       onCancel={(e) => {

@@ -5,7 +5,7 @@ Tanggal: 31 Oktober 2026. Dokumen ini hanya mencatat pemeriksaan yang benar-bena
 ## Hasil kode dan pengujian
 
 - Build solusi .NET10 lulus dengan 0 warning dan 0 error. API, Core, worker, gateway dan test project berhasil dikompilasi. Sesudah penambahan Delete item, `test-local.ps1` mengompilasi ulang API dan test project sebelum menjalankan tes.
-- TypeScript dan build Vite lulus. Bundle dipisah menjadi aplikasi 454.05kB, chart 209.09kB dan SignalR 55.67kB sebelum gzip; ini ukuran artefak build, bukan pengukuran performa pengguna. Ada dua pemberitahuan annotation PURE dari paket SignalR; build berhasil.
+- TypeScript dan build Vite revisi layout lulus. Bundle aplikasi 462.26kB, chart 209.09kB dan SignalR 55.67kB sebelum gzip; ini ukuran build, bukan pengukuran performa pengguna. Dua pemberitahuan annotation PURE dari SignalR tetap ada dan tidak menggagalkan build.
 - **39/39 uji xUnit lulus, 0 skipped, pada PostgreSQL 18.4 nyata**, durasi 4 menit 23 detik. Laporan: `backend/Wms.Tests/TestResults/postgres-foundation.trx` (artefak lokal yang diabaikan Git). Jumlah ini mencakup 28 tes fondasi/katalog dan 11 tes pipeline HTTP. Fixture membuat database unik per tes dan menonaktifkan pooling koneksi untuk database tes agar koneksi idle lintas database tidak menumpuk. Penguncian dan konkurensi tetap memakai PostgreSQL asli.
 - 19 tes fondasi/workflow: penerimaan60/sisa40 dan idempotensi, key berubah, rollback precommit, reservasi bersamaan, request identik bersamaan, picking, transfer50/48, freeze, desimal, akses dicabut, blind count API, QC/putaway dan konservasi ledger, pengiriman aktual, pembatalan/return-to-stock, reviewer opname berbeda, JSON kanonis, pending milik principal asal, spool SQLite setelah dibuka ulang, dan pemeriksaan akses CSV terkini.
 - 9 tes Delete item: admin/supervisor dapat menghapus barang belum digunakan dan menyimpan audit snapshot; posisi stok nol, dokumen di gudang lain, kemasan di gudang lain dan riwayat label menghalangi penghapusan; operator, alasan kosong dan versi usang ditolak.
@@ -25,9 +25,15 @@ Tanggal: 31 Oktober 2026. Dokumen ini hanya mencatat pemeriksaan yang benar-bena
 
 ## Batas pemeriksaan visual
 
+Pembaruan setelah permintaan perbaikan screenshot: browser berhasil digunakan kembali untuk alignment stok, sidebar, katalog Items dan editor. Search/filter/sort, empty state, pagination 10/25/50 dengan fixture 10.000 item, draft/discard, validasi duplikat, submit editor dalam fixture, keyboard, tema gelap/Indonesia, serta lebar 390/900/1448 dan tinggi sidebar650 diperiksa. Tidak ada horizontal page overflow pada ukuran tersebut atau error aplikasi pada log yang diperiksa. Tiga tes katalog baru lulus; lima tes pending dan empat tes packaging dijalankan ulang dan lulus.
+
+Root `design-qa.md` sekarang `final result: passed` **hanya untuk cakupan perubahan layout tersebut**. Bukti berada di `prototype/qa/layout-20261031/`; gate scoped ada pada `layout-antislop-gate.md`. Snapshot API masih memuat master sebelum pagination UI; pengujian fixture bukan bukti skalabilitas database atau payload produksi. Backend tidak berubah dan 39 tes backend tidak diulang untuk perubahan frontend ini.
+
+Catatan batas sebelumnya di bawah tetap berlaku bagi fungsi lain yang tidak diperiksa pada revisi layout:
+
 Peninjauan akses browser otomatis habis waktu dua kali ketika memeriksa origin lokal. Pengguna kemudian memilih **cukup selesaikan kode dan laporkan batas verifikasi**. Pemeriksaan browser tidak dilanjutkan. Tidak ada klaim lolos QA visual, responsive, keyboard, tema/bahasa, seluruh kontrol, atau console bersih pada versi akhir. Tombol Delete item serta Add user/Delete user sudah dikompilasi dan aturan backend diuji; klik dialognya di browser belum diverifikasi. Label pilihan bahasa pada komponen bersama diubah menjadi Bahasa Indonesia; tambahan dalam tanda kurung sudah dihapus dari kode UI.
 
-`design-qa.md` berstatus `final result: blocked`. Perbaikan proporsi panel stok sudah ditulis tetapi belum dicapture ulang. Gate antislop belum lulus penuh; lihat `docs/implementation/antislop-gate.md`. Penyerahan ini adalah hasil implementasi kode dengan batas pengujian yang disetujui pengguna, bukan penerimaan desain akhir.
+Baseline QA yang berstatus blocked disimpan di `design-qa-before-layout.md`. Gate antislop seluruh aplikasi tetap belum lulus penuh; lihat `antislop-gate.md`. Hasil scoped layout tidak berarti seluruh 21 fungsi sudah diterima.
 
 ## Tidak dijalankan
 
