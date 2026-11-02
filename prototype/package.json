@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test:sites": "node --test tests/sites-worker.test.mjs",
     "test:pending": "node --experimental-transform-types --test tests/pending.test.mjs",
-    "test:catalogue": "node --experimental-transform-types --test tests/item-catalog.test.mjs"
+    "test:catalogue": "node --experimental-transform-types --test tests/item-catalog.test.mjs",
+    "test:work-queue": "node --experimental-transform-types --test tests/work-queue.test.mjs",
+    "test:autocomplete": "node --experimental-transform-types --test tests/autocomplete.test.mjs"
   },
   "dependencies": {
     "@fontsource/source-sans-3": "^5.3.1",

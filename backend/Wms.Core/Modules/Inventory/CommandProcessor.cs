@@ -44,6 +44,7 @@ public sealed partial class CommandProcessor(WmsDb db)
             input.OccurredAt
         })));
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+        await RecoveryState.RequireWritable(db, ct);
         // Serialize identical requests before taking location locks; different keys still meet at the stock locks.
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({scopeKey}, 0))", ct);
         var prior = await db.Requests.SingleOrDefaultAsync(r => r.ScopeKey == scopeKey, ct);
@@ -53,13 +54,16 @@ public sealed partial class CommandProcessor(WmsDb db)
             Require(prior.WarehouseId == actor.WarehouseId, "scope", 403);
             return JsonSerializer.Deserialize<CommandResult>(prior.ResultJson)!;
         }
-        locations = await db.Locations.FromSqlInterpolated($"SELECT * FROM \"Locations\" WHERE \"WarehouseId\" = {actor.WarehouseId} OR \"WarehouseId\" = 'transit' ORDER BY \"Id\" FOR UPDATE").ToListAsync(ct);
+        var transitId = command.Type == "transfer-receive" ? $"transit|{command.Payload.Text("document")}" : "";
+        locations = await db.Locations.FromSqlInterpolated($"SELECT * FROM \"Locations\" WHERE \"WarehouseId\" = {actor.WarehouseId} OR \"Id\" = {transitId} ORDER BY \"Id\" FOR UPDATE").ToListAsync(ct);
         var locationIds = locations.Select(l => l.Id).ToArray();
         positions = await db.Positions.Where(p => p.CompanyId == "demo" && locationIds.Contains(p.LocationId)).ToListAsync(ct);
         documents = await db.Documents.Where(d => d.CompanyId == "demo" && (d.WarehouseId == actor.WarehouseId || d.TargetWarehouseId == actor.WarehouseId)).ToListAsync(ct);
         var docIds = documents.Select(d => d.Id).ToArray();
         allocations = await db.Allocations.Where(a => docIds.Contains(a.OrderId)).ToListAsync(ct);
-        items = await db.Items.Where(i => i.CompanyId == "demo").ToListAsync(ct);
+        var relatedItems = positions.Select(position => position.ItemId).Concat(documents.Select(document => document.ItemId)).Distinct().ToArray();
+        var requestedSku = input.Payload.Text("sku");
+        items = await db.Items.AsNoTracking().Where(i => i.CompanyId == "demo" && (relatedItems.Contains(i.Id) || i.Sku == requestedSku)).Select(i => new Item { Id = i.Id, Sku = i.Sku, Barcode = i.Barcode, Active = i.Active, Unit = i.Unit, ConversionFactor = i.ConversionFactor }).ToListAsync(ct);
         Require(await db.Principals.AnyAsync(u => u.Id == actor.Id && u.Status == "active", ct) && await db.AccessGrants.AnyAsync(g => g.PrincipalId == actor.Id && g.WarehouseId == actor.WarehouseId && g.Role == actor.Role, ct), "denied", 403);
         transactionId = $"TX-{Guid.NewGuid():N}";
         await Apply(ct);
@@ -81,7 +85,7 @@ public sealed partial class CommandProcessor(WmsDb db)
         if (aggregateId.Length == 0)
             aggregateId = transactionId;
         if (input.Type is not "erp-retry" and not "count-submit" and not "freeze" and not "unfreeze" and not "recount")
-            db.Outbox.Add(new OutboxEvent { WarehouseId = actor.WarehouseId, AggregateId = aggregateId, AggregateVersion = documents.FirstOrDefault(d => d.Id == aggregateId)?.Version ?? 0, Kind = input.Type, PayloadJson = JsonSerializer.Serialize(new { transactionId, input.Type, Warehouse = actor.WarehouseId, input.Payload, PostedAt = now }), CreatedAt = now, NextAttemptAt = now });
+            db.Outbox.Add(new OutboxEvent { WarehouseId = actor.WarehouseId, AggregateId = aggregateId, AggregateVersion = documents.FirstOrDefault(d => d.Id == aggregateId)?.Version ?? 0, Kind = input.Type, PayloadJson = JsonSerializer.Serialize(new { transactionId, input.Type, Warehouse = actor.WarehouseId, input.Payload, PostedAt = now, requestIdempotencyKey = key, requestPrincipalId = actor.Id, requestPayloadHash = hash, expectedVersion = input.ExpectedVersion, occurredAt = input.OccurredAt }), CreatedAt = now, NextAttemptAt = now });
         if (BeforeCommit is not null)
             await BeforeCommit();
         await db.SaveChangesAsync(ct);
@@ -200,7 +204,7 @@ public sealed partial class CommandProcessor(WmsDb db)
                     var q = p.Quantity();
                     var to = p.Text("destination");
                     VerifyLocation(to);
-                    Require(to is "A-01" or "A-02", "scan-location", 400);
+                    Require(locations.Any(l => l.WarehouseId == actor.WarehouseId && l.Code == to && l.Pickable), "scan-location", 400);
                     var source = Position(task.ItemId, "Receiving");
                     var target = Position(task.ItemId, to);
                     Require(q <= task.Quantity - task.Actual && q <= source.OnHand, "remainder");
@@ -224,7 +228,7 @@ public sealed partial class CommandProcessor(WmsDb db)
             case "transfer-receive":
             case "customer-return":
             case "supplier-return":
-                TransferOrReturn();
+                await TransferOrReturn(ct);
                 break;
             case "freeze":
             case "count-submit":
@@ -249,7 +253,9 @@ public sealed partial class CommandProcessor(WmsDb db)
                     Require(Guid.TryParse(p.Text("event"), out var eventId), "source", 400);
                     var e = await db.Outbox.SingleOrDefaultAsync(e => e.Id == eventId && e.WarehouseId == actor.WarehouseId, ct);
                     Require(e is not null && e.TransportStatus != "acknowledged", "task");
+                    Require(e!.BusinessStatus != "accepted" && (e.LeaseUntil is null || e.LeaseUntil < now), "task");
                     e!.TransportStatus = "pending";
+                    e.BusinessStatus = "unknown";
                     e.NextAttemptAt = now;
                     break;
                 }

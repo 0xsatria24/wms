@@ -2,7 +2,7 @@ export const MAIN = "Main Warehouse";
 export const SECONDARY = "Secondary Warehouse";
 export const locations = ["A-01", "A-02", "Receiving", "QC", "Staging"];
 export const available = (p: any): number =>
-  p.condition === "good" && !p.hold && !p.frozen && /^A-/.test(p.location)
+  p.condition === "good" && !p.hold && !p.frozen && (p.pickable ?? /^A-/.test(p.location))
     ? p.qty - p.reserved
     : 0;
 export const total = (rows: any[], field: string) =>

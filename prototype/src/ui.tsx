@@ -4,7 +4,10 @@ import React, {
   useEffect,
   useId,
   useRef,
+  useState,
 } from "react";
+import { AutocompleteInput } from "./Autocomplete";
+import type { Suggestion } from "./autocomplete-model";
 import {
   Info,
   CheckCircle,
@@ -27,6 +30,8 @@ interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   hint?: React.ReactNode;
   error?: React.ReactNode;
   children?: React.ReactElement<any>;
+  suggestions?: Suggestion[];
+  onValueChange?: (value: string) => void;
 }
 interface BoxProps {
   children?: React.ReactNode;
@@ -52,21 +57,55 @@ export function Button({
     </button>
   );
 }
-export function Field({ label, hint, error, children, ...props }: FieldProps) {
+export function Field({
+  label,
+  hint,
+  error,
+  children,
+  suggestions,
+  onValueChange,
+  ...props
+}: FieldProps) {
   const id = useId();
+  const t = useText();
+  const describedBy =
+    [props["aria-describedby"], hint || error ? `${id}-hint` : ""]
+      .filter(Boolean)
+      .join(" ") || undefined;
   return (
     <div className="field">
-      <label htmlFor={id}>{label}</label>
+      <label id={`${id}-label`} htmlFor={id}>
+        {label}
+      </label>
       {children ? (
         React.cloneElement(children, {
           id,
-          "aria-describedby": hint || error ? `${id}-hint` : undefined,
+          "aria-describedby": describedBy,
           "aria-invalid": !!error,
         })
+      ) : suggestions && onValueChange ? (
+        <AutocompleteInput
+          {...props}
+          id={id}
+          aria-describedby={describedBy}
+          aria-invalid={!!error}
+          suggestions={suggestions}
+          onValueChange={onValueChange}
+          emptyMessage={t(
+            "No matching saved values. You can keep typing.",
+            "Belum ada data yang cocok. Kamu bisa lanjut mengetik.",
+          )}
+          resultsMessage={(count) =>
+            t(
+              `${count} suggestions available. Use the up and down arrow keys to choose.`,
+              `${count} saran tersedia. Gunakan panah atas dan bawah untuk memilih.`,
+            )
+          }
+        />
       ) : (
         <input
           id={id}
-          aria-describedby={hint || error ? `${id}-hint` : undefined}
+          aria-describedby={describedBy}
           aria-invalid={!!error}
           {...props}
         />
@@ -77,6 +116,77 @@ export function Field({ label, hint, error, children, ...props }: FieldProps) {
         </small>
       )}
     </div>
+  );
+}
+
+interface LookupProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "onChange"
+> {
+  options: Suggestion[];
+  onValueChange: (value: string) => void;
+}
+
+export function Lookup({
+  options,
+  value,
+  onValueChange,
+  onFocus,
+  onBlur,
+  onKeyDown,
+  ...props
+}: LookupProps) {
+  const t = useText();
+  const [query, setQuery] = useState<string | null>(null);
+  useEffect(() => setQuery(null), [value]);
+  const selected = options.find((option) => option.value === value);
+  const label = selected
+    ? selected.value && selected.value !== selected.label
+      ? `${selected.value} · ${selected.label}`
+      : selected.label
+    : "";
+  return (
+    <AutocompleteInput
+      {...props}
+      value={query ?? label}
+      suggestions={options}
+      filterQuery={query ?? ""}
+      onValueChange={setQuery}
+      onSuggestionSelect={(option) => {
+        onValueChange(option.value);
+        setQuery(null);
+      }}
+      onFocus={(event) => {
+        event.target.select();
+        onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        if (query !== null && query !== label) setQuery(null);
+        onBlur?.(event);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setQuery(null);
+        onKeyDown?.(event);
+      }}
+      validationMessage={
+        query !== null && query !== label
+          ? t(
+              "Choose a value from the suggestions.",
+              "Pilih data dari daftar saran.",
+            )
+          : ""
+      }
+      emptyMessage={t(
+        "No matching saved values. Try another name or code.",
+        "Tidak ada data yang cocok. Coba nama atau kode lain.",
+      )}
+      resultsMessage={(count) =>
+        t(
+          `${count} suggestions available. Use the up and down arrow keys to choose.`,
+          `${count} saran tersedia. Gunakan panah atas dan bawah untuk memilih.`,
+        )
+      }
+    />
   );
 }
 export function Notice({
@@ -215,7 +325,7 @@ export function Thumb({
 export function ProductName({ product }) {
   return (
     <div className="product-name">
-      <Thumb product={product} />
+      {product?.image && <Thumb product={product} />}
       <div>
         <strong>{product?.name}</strong>
         <small>{product?.sku}</small>
@@ -230,6 +340,7 @@ export function DataTable({
   empty,
   onSelect,
   selected,
+  showSelectionMark = true,
 }: {
   columns: {
     key: string;
@@ -242,10 +353,11 @@ export function DataTable({
   empty?: string;
   onSelect?: (row: any, index: number) => void;
   selected?: any;
+  showSelectionMark?: boolean;
 }) {
   return (
     <div className="table-wrap">
-      <table aria-label={label}>
+      <table className="data-table" aria-label={label}>
         <thead>
           <tr>
             {columns.map((c) => (
@@ -279,6 +391,14 @@ export function DataTable({
                       onClick={() => onSelect(row, i)}
                     >
                       {col.render ? col.render(row) : row[col.key]}
+                      {showSelectionMark && (
+                        <CheckCircle
+                          size={16}
+                          className="table-selection-mark"
+                          data-selected={selected === (row.id || i)}
+                          aria-hidden="true"
+                        />
+                      )}
                     </button>
                   ) : col.render ? (
                     col.render(row)
@@ -366,6 +486,7 @@ export function DownloadButton({ filename, rows, children }) {
 }
 export function errorText(code, t) {
   const messages = {
+    "recovery-hold": ["Write operations are paused for recovery reconciliation. Keep the original request ID and contact operations.", "Penulisan ditahan untuk rekonsiliasi pemulihan. Simpan ID permintaan asli dan hubungi pengelola operasi."],
     "user-duplicate": [
       "This email is already registered. Use a different email or contact your access administrator.",
       "Email ini sudah terdaftar. Gunakan email lain atau hubungi pengelola akses.",

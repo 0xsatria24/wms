@@ -1,0 +1,11 @@
+[Unit]
+Description=Inventory WMS backup schedule
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=60
+Unit=wms-backup.service
+
+[Install]
+WantedBy=timers.target

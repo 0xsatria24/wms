@@ -1,0 +1,98 @@
+{
+  "checks": [
+    "Document search: PO-SIM-113 returns the correct SKU-B row and its original quantities.",
+    "Filtered empty state and clear filters work; status=partially-received plus SKU-A returns the six expected rows.",
+    "Remaining descending puts quantity 100 first; page 2 in document order starts PO-SIM-110.",
+    "25/50-row page sizes render 25/32 rows. Open PO-SIM-101 selects the correct document and focuses its detail panel. Enter opens PO-SIM-100 with a 3px solid focus outline. Filtering preserves quantity draft 17.",
+    "Phone application: 375px client/scroll width, overflow contained in 311px table region (820px content); ArrowRight scrolls it and keeps visible focus. Empty purchase-order fixture reached with Enter. Tablet/dark/Indonesian checked."
+  ],
+  "workflows": [
+    {
+      "workflow": "quality",
+      "cards": 0,
+      "columns": [
+        "Task",
+        "Item / SKU",
+        "Source",
+        "Remaining",
+        "Status",
+        "Actions"
+      ],
+      "heading": "QC-SIM-100",
+      "overflow": false,
+      "rows": 10
+    },
+    {
+      "workflow": "putaway",
+      "cards": 0,
+      "columns": [
+        "Task",
+        "Item / SKU",
+        "Source",
+        "Remaining",
+        "Status",
+        "Actions"
+      ],
+      "heading": "PUT-SIM-100",
+      "overflow": false,
+      "rows": 10
+    },
+    {
+      "workflow": "orders",
+      "cards": 0,
+      "columns": [
+        "Document",
+        "Item / SKU",
+        "Requested",
+        "Remaining",
+        "Status",
+        "Actions"
+      ],
+      "heading": "SO-SIM-1001",
+      "overflow": false,
+      "rows": 3
+    },
+    {
+      "workflow": "reservations",
+      "cards": 0,
+      "columns": [
+        "Document",
+        "Item / SKU",
+        "Remaining",
+        "Status",
+        "Actions"
+      ],
+      "heading": "SO-SIM-1001",
+      "overflow": false,
+      "rows": 2
+    },
+    {
+      "workflow": "picking",
+      "cards": 0,
+      "columns": [
+        "Document",
+        "Item / SKU",
+        "Remaining",
+        "Status",
+        "Actions"
+      ],
+      "heading": "SO-SIM-1001",
+      "overflow": false,
+      "rows": 2
+    },
+    {
+      "workflow": "shipping",
+      "cards": 0,
+      "columns": [
+        "Document",
+        "Item / SKU",
+        "Remaining",
+        "Status",
+        "Actions"
+      ],
+      "heading": "SO-SIM-1001",
+      "overflow": false,
+      "rows": 2
+    }
+  ]
+}

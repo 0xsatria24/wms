@@ -1,0 +1,49 @@
+{
+  "client": 1425,
+  "headers": [
+    {
+      "align": "left",
+      "label": "Item"
+    },
+    {
+      "align": "left",
+      "label": "Location"
+    },
+    {
+      "align": "left",
+      "label": "Condition"
+    },
+    {
+      "align": "right",
+      "label": "Reserved"
+    },
+    {
+      "align": "right",
+      "label": "Available"
+    },
+    {
+      "align": "left",
+      "label": "Unit"
+    }
+  ],
+  "panel": {
+    "height": 575.84375,
+    "width": 788.6666870117188,
+    "x": 262,
+    "y": 164.1666717529297
+  },
+  "rowHeights": [
+    56,
+    56,
+    56,
+    56,
+    56
+  ],
+  "scroll": 1425,
+  "selection": "Details: SKU-A · All locations",
+  "thumbnails": 0,
+  "viewport": {
+    "height": 1000,
+    "width": 1440
+  }
+}

@@ -237,6 +237,8 @@ namespace Wms.Api.Infrastructure.Migrations
                     b.HasIndex("CompanyId", "Sku")
                         .IsUnique();
 
+                    b.HasIndex("CompanyId", "Name", "Sku");
+
                     b.ToTable("Items");
                 });
 
@@ -392,7 +394,7 @@ namespace Wms.Api.Infrastructure.Migrations
 
                     b.HasIndex("ItemId");
 
-                    b.HasIndex("WarehouseId");
+                    b.HasIndex("WarehouseId", "Kind", "Status");
 
                     b.ToTable("OperationalDocuments", null, t =>
                         {
@@ -450,6 +452,8 @@ namespace Wms.Api.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessStatus", "CreatedAt");
 
                     b.HasIndex("TransportStatus", "NextAttemptAt");
 
@@ -563,6 +567,8 @@ namespace Wms.Api.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("WarehouseId", "PostedAt");
 
                     b.ToTable("Movements");
                 });

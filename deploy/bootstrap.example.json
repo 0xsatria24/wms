@@ -1,0 +1,10 @@
+{
+  "issuer": "https://identity.example/replace-with-token-issuer",
+  "subject": "replace-with-administrator-subject",
+  "email": "administrator@example.com",
+  "name": "Warehouse administrator",
+  "warehouses": [
+    { "id": "main", "name": "Main Warehouse", "storageLocations": ["A-01", "A-02"] }
+  ],
+  "partialAllowed": false
+}

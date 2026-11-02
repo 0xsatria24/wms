@@ -256,6 +256,7 @@ export function Auth({
                     required
                     value={form.company}
                     onChange={change("company")}
+                    autoComplete="organization"
                   />
                   <Field
                     label={t(
@@ -393,7 +394,7 @@ export function Auth({
   );
 }
 
-export function Workspace({ user, warehouse, setWarehouse, data, go }) {
+export function Workspace({ user, warehouse, setWarehouse, data, go, companyName }) {
   const t = useText();
   const [selected, setSelected] = useState(warehouse);
   const pending = data.pending.filter((p) => p.request.user === user.id);
@@ -426,7 +427,7 @@ export function Workspace({ user, warehouse, setWarehouse, data, go }) {
       />
       <Field label={t("Company", "Perusahaan")}>
         <select>
-          <option>Demo Company</option>
+          <option>{companyName}</option>
         </select>
       </Field>
       <Field label={t("Warehouse", "Gudang")}>

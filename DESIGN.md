@@ -6,6 +6,8 @@ Pengguna meminta implementasi ulang dari mockup pada chat “Rancang sistem desa
 
 Design Read: ruang kerja Inventory/WMS untuk operator, supervisor dan pengelola akses; sidebar putih, workspace abu dingin, panel radius16, pilihan cyan pucat dan aksi deep blue. ENERGY 1 / RHYTHM 1 / MOTION 1. English default; Bahasa Indonesia santai tersedia. Logo klien belum ditentukan.
 
+Penyempurnaan tabel disetujui 1 November 2026: tabel operasional lebih rapat, nama barang semibold, SKU sekunder, thumbnail hanya untuk foto nyata, pemilihan lembut dengan penanda eksplisit, dan pengecualian kualitas lebih jelas. Pada Stock position, teks rata kiri dan kuantitas rata kanan; pilihan SKU mencakup detail semua lokasi. Alignment Role/Warehouse access/Status/Actions di Access management tetap center sesuai koreksi khusus pengguna. Format katalog, pencarian/filter/pagination dan alur transaksi yang sudah dipilih tetap menjadi dasar.
+
 Bagian di bawah mencatat arah dan batas tahap historis. Pernyataan “tanpa implementasi” pada arsip tidak membatasi permintaan implementasi terbaru.
 
 ## Acuan usulan terbaru, 29 Oktober 2026

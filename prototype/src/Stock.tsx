@@ -1,19 +1,26 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   MagnifyingGlass,
   FunnelSimple,
   UploadSimple,
-  CaretLeft,
-  CaretRight,
+  CheckCircle,
+  WarningCircle,
   ArrowDown,
   ArrowUp,
   ArrowsDownUp,
+  CaretRight,
+  CaretDown,
+  CaretLeft,
 } from "@phosphor-icons/react";
-import Chart from "chart.js/auto";
-import { available, locations } from "./fixtures";
+import { ShipmentTrends } from "./ShipmentTrends";
+import { available } from "./fixtures";
+import { productSuggestions, valueSuggestions } from "./autocomplete-model";
+import { stockItemPage } from "./stock-items";
+import { useServerCatalogue } from "./server-catalogue";
 import {
   Button,
   Field,
+  Lookup,
   Notice,
   Panel,
   Tag,
@@ -25,89 +32,7 @@ import {
   useText,
 } from "./ui.tsx";
 
-const months = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-];
-const trend = [80, 90, 100, 110, 100, 120, 110, 100, 120, 170];
-function TrendChart({ locale }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const dark = document.documentElement.dataset.theme === "dark";
-    const chart = new Chart(canvas.current, {
-      type: "line",
-      data: {
-        labels: months,
-        datasets: [
-          {
-            label:
-              locale === "en" ? "Shipped units (2026)" : "Unit terkirim (2026)",
-            data: trend,
-            borderColor: dark ? "#85BDFF" : "#005FCC",
-            backgroundColor: dark ? "#85BDFF" : "#005FCC",
-            borderWidth: 2,
-            pointRadius: 3,
-            segment: {
-              borderDash: (c) => (c.p1DataIndex === 9 ? [5, 4] : undefined),
-            },
-            pointStyle: (c) => (c.dataIndex === 9 ? "rectRot" : "circle"),
-          },
-        ],
-      },
-      options: {
-        animation: false,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              afterLabel: (c) =>
-                c.dataIndex === 9
-                  ? locale === "en"
-                    ? "Partial through 28 Oct"
-                    : "Parsial sampai 28 Okt"
-                  : "",
-            },
-          },
-        },
-        scales: {
-          x: {
-            ticks: { color: dark ? "#BBC9DA" : "#526176", font: { size: 11 } },
-            grid: { color: dark ? "#304153" : "#E8EEF5" },
-          },
-          y: {
-            min: 0,
-            max: 200,
-            ticks: { stepSize: 50, color: dark ? "#BBC9DA" : "#526176" },
-            grid: { color: dark ? "#304153" : "#E8EEF5" },
-          },
-        },
-      },
-    });
-    return () => chart.destroy();
-  }, [locale]);
-  return (
-    <div className="chart-slot">
-      <canvas
-        ref={canvas}
-        aria-label={
-          locale === "en"
-            ? "Monthly shipped units, January to October 2026. Data table below."
-            : "Unit terkirim bulanan, Januari sampai Oktober 2026. Tabel data ada di bawah."
-        }
-        role="img"
-      />
-    </div>
-  );
-}
+const stockColumnWidths = [26, 12, 13, 15, 12, 12, 10];
 
 export function Stock({
   data,
@@ -118,12 +43,18 @@ export function Stock({
   ask,
   flash,
   locale,
+  setCatalogueQuery,
+  authMode,
 }) {
   const t = useText();
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [loc, setLoc] = useState("");
   const [condition, setCondition] = useState("");
+  const [stockStatus, setStockStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState("item");
   const [descending, setDescending] = useState(false);
   const [selected, setSelected] = useState("SKU-A");
@@ -133,29 +64,105 @@ export function Stock({
   const [openingQty, setOpeningQty] = useState("");
   const [reason, setReason] = useState("");
   const inputFile = useRef<HTMLInputElement>(null);
-  const positions = data.positions.filter(
-    (p) => p.warehouse === warehouse && p.qty > 0,
+  const positions = useMemo(
+    () => data.positions.filter((p) => p.warehouse === warehouse && p.qty > 0),
+    [data.positions, warehouse],
   );
   const product = data.products.find((p) => p.sku === selected);
-  const filtered = positions
-    .filter((p) => {
-      const item = data.products.find((i) => i.sku === p.sku);
-      return (
-        `${p.sku} ${item?.name} ${p.location}`
-          .toLowerCase()
-          .includes(search.toLowerCase()) &&
-        (!loc || p.location === loc) &&
-        (!condition || p.condition === condition)
-      );
-    })
-    .sort(
-      (a, b) =>
-        (sort === "available"
-          ? available(a) - available(b)
-          : sort === "location"
-            ? a.location.localeCompare(b.location)
-            : a.sku.localeCompare(b.sku)) * (descending ? -1 : 1),
-    );
+  const server = useServerCatalogue(data, setCatalogueQuery, { view: "stock", query: search, location: loc, condition, status: stockStatus, sort, descending, page, pageSize, focusSku: selected });
+  const localResult = useMemo(
+    () =>
+      stockItemPage(server ? data.positions.filter((position) => server.ids.includes(position.sku)) : data.positions, data.products, {
+        warehouse,
+        query: search,
+        location: loc,
+        condition,
+        status: stockStatus,
+        sort,
+        descending,
+        page: setCatalogueQuery ? 1 : page,
+        pageSize,
+      }),
+    [
+      data.positions,
+      data.products,
+      warehouse,
+      search,
+      loc,
+      condition,
+      stockStatus,
+      sort,
+      descending,
+      page,
+      pageSize,
+      server,
+    ],
+  );
+  const result = server ? { ...localResult, ...server, items: localResult.items } : localResult;
+  useEffect(
+    () => setPage(1),
+    [
+      warehouse,
+      search,
+      loc,
+      condition,
+      stockStatus,
+      sort,
+      descending,
+      pageSize,
+    ],
+  );
+  const filtersActive = !!(search.trim() || loc || condition || stockStatus);
+  const clearFilters = () => {
+    setSearch("");
+    setLoc("");
+    setCondition("");
+    setStockStatus("");
+    setPage(1);
+  };
+  const conditionLabel = (value) =>
+    value === "good"
+      ? t("Good", "Bagus")
+      : value === "not-good"
+        ? t("Not good", "Tidak bagus")
+        : t("Not assessed yet", "Belum dicek");
+  const renderCondition = (value) => (
+    <Tag
+      kind={
+        value === "good"
+          ? "success"
+          : value === "not-good"
+            ? "warning"
+            : "neutral"
+      }
+    >
+      {conditionLabel(value)}
+    </Tag>
+  );
+  const renderStatus = (p) => (
+    <div className="stock-condition">
+      {p.frozen && (
+        <small className="hold-label">
+          <WarningCircle size={13} aria-hidden="true" />
+          {t("Frozen", "Dibekukan")}
+        </small>
+      )}
+      {p.hold && (
+        <small className="hold-label">
+          <WarningCircle size={13} aria-hidden="true" />
+          {p.hold === "awaiting-qc"
+            ? t("Awaiting QC", "Menunggu QC")
+            : t("On hold", "Ditahan")}
+        </small>
+      )}
+      {!p.frozen && !p.hold && (
+        <span aria-label={t("No stock restriction", "Tanpa pembatasan stok")}>
+          —
+        </span>
+      )}
+    </div>
+  );
+  const unitLabel = (unit) => (unit === "units" ? t("units", "unit") : unit);
   const changeSort = (key) => {
     setDescending(sort === key ? !descending : false);
     setSort(key);
@@ -193,7 +200,17 @@ export function Stock({
               "Cari barang, SKU, atau lokasi",
             )}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onValueChange={setSearch}
+            suggestions={[
+              ...productSuggestions(
+                data.products.filter((product) =>
+                  positions.some((position) => position.sku === product.sku),
+                ),
+              ),
+              ...valueSuggestions(
+                positions.map((position) => position.location),
+              ),
+            ]}
             type="search"
             placeholder={t(
               "Search items, SKU or location…",
@@ -212,12 +229,16 @@ export function Stock({
       {filterOpen && (
         <div className="filter-bar panel">
           <Field label={t("Location", "Lokasi")}>
-            <select value={loc} onChange={(e) => setLoc(e.target.value)}>
-              <option value="">{t("All locations", "Semua lokasi")}</option>
-              {locations.map((l) => (
-                <option key={l}>{l}</option>
-              ))}
-            </select>
+            <Lookup
+              value={loc}
+              onValueChange={setLoc}
+              options={[
+                { value: "", label: t("All locations", "Semua lokasi") },
+                ...valueSuggestions(
+                  positions.map((position) => position.location),
+                ),
+              ]}
+            />
           </Field>
           <Field label={t("Condition", "Kondisi")}>
             <select
@@ -232,13 +253,22 @@ export function Stock({
               </option>
             </select>
           </Field>
-          <Button
-            onClick={() => {
-              setSearch("");
-              setLoc("");
-              setCondition("");
-            }}
-          >
+          <Field label={t("Stock status", "Status stok")}>
+            <select
+              value={stockStatus}
+              onChange={(event) => setStockStatus(event.target.value)}
+            >
+              <option value="">
+                {t("All stock statuses", "Semua status stok")}
+              </option>
+              <option value="frozen">{t("Frozen", "Dibekukan")}</option>
+              <option value="hold">{t("On hold", "Ditahan")}</option>
+              <option value="unrestricted">
+                {t("No stock restriction", "Tanpa pembatasan stok")}
+              </option>
+            </select>
+          </Field>
+          <Button onClick={clearFilters}>
             {t("Clear filters", "Hapus filter")}
           </Button>
           {user.role !== "operator" && (
@@ -250,24 +280,113 @@ export function Stock({
       )}
       <div className="stock-grid">
         <Panel className="stock-table-panel">
-          <div className="table-wrap">
-            <table aria-label={t("Stock position", "Posisi stok")}>
+          <div className="table-heading">
+            <div>
+              <h2>{t("Stock by item", "Stok per barang")}</h2>
+              <p id="stock-selection-scope" className="muted">
+                {t(
+                  "Select an item to view its details across all locations.",
+                  "Pilih barang untuk melihat detailnya di semua lokasi.",
+                )}
+              </p>
+            </div>
+            {product && (
+              <span className="table-viewing" role="status">
+                <CheckCircle size={16} aria-hidden="true" />
+                {t(
+                  `Details: ${selected} · All locations`,
+                  `Detail: ${selected} · Semua lokasi`,
+                )}
+              </span>
+            )}
+          </div>
+          <p id="stock-filter-scope" className="stock-filter-scope muted">
+            {filtersActive
+              ? t(
+                  "Filtered view: counts, totals and expanded positions include matches only.",
+                  "Tampilan terfilter: jumlah, total, dan rincian posisi hanya mencakup hasil yang cocok.",
+                )
+              : t(
+                  "Totals cover all positions in this warehouse. Expand an item to compare its positions.",
+                  "Total mencakup semua posisi di gudang ini. Buka barang untuk membandingkan posisinya.",
+                )}
+          </p>
+          <div className="stock-mobile-sort">
+            <Field label={t("Sort stock by", "Urutkan stok")}>
+              <select
+                value={`${sort}:${descending ? "desc" : "asc"}`}
+                onChange={(event) => {
+                  const [key, direction] = event.target.value.split(":");
+                  setSort(key);
+                  setDescending(direction === "desc");
+                }}
+              >
+                <option value="item:asc">{t("Item A–Z", "Barang A–Z")}</option>
+                <option value="item:desc">{t("Item Z–A", "Barang Z–A")}</option>
+                <option value="location:asc">
+                  {t("Location A–Z", "Lokasi A–Z")}
+                </option>
+                <option value="location:desc">
+                  {t("Location Z–A", "Lokasi Z–A")}
+                </option>
+                <option value="available:desc">
+                  {t("Available: high to low", "Tersedia: terbesar dahulu")}
+                </option>
+                <option value="available:asc">
+                  {t("Available: low to high", "Tersedia: terkecil dahulu")}
+                </option>
+              </select>
+            </Field>
+          </div>
+          <div
+            className="stock-group-scroll"
+            role="region"
+            tabIndex={0}
+            aria-label={t(
+              "Stock position table; scroll horizontally for all columns",
+              "Tabel posisi stok; geser ke samping untuk semua kolom",
+            )}
+          >
+            <table
+              className="data-table stock-group-table"
+              aria-label={t("Stock position", "Posisi stok")}
+              aria-describedby="stock-selection-scope stock-filter-scope"
+            >
+              <colgroup>
+                {stockColumnWidths.map((width, index) => (
+                  <col key={index} style={{ width: `${width}%` }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
                   {[
                     ["item", t("Item", "Barang")],
                     ["location", t("Location", "Lokasi")],
                     ["condition", t("Condition", "Kondisi")],
-                    ["reserved", t("Reserved for orders", "Dipesan")],
+                    ["status", t("Stock status", "Status stok")],
+                    ["reserved", t("Reserved", "Dipesan")],
                     ["available", t("Available", "Tersedia")],
                     ["unit", t("Unit", "Satuan")],
                   ].map(([key, label]) => (
                     <th
                       key={key}
+                      scope="col"
                       className={
                         ["reserved", "available"].includes(key) ? "numeric" : ""
                       }
-                      scope="col"
+                      aria-label={
+                        key === "reserved"
+                          ? t("Reserved for orders", "Dipesan untuk order")
+                          : label
+                      }
+                      title={
+                        key === "available"
+                          ? t(
+                              "Quantities are sorted within the same unit",
+                              "Jumlah diurutkan dalam satuan yang sama",
+                            )
+                          : undefined
+                      }
                       aria-sort={
                         sort === key
                           ? descending
@@ -302,73 +421,209 @@ export function Stock({
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p, i) => {
-                  const item = data.products.find((i) => i.sku === p.sku);
+                {result.items.map((group) => {
+                  const multiple = group.rows.length > 1;
+                  const isOpen = multiple && expanded.has(group.key);
+                  const detailId = `stock-positions-${encodeURIComponent(group.key)}`;
+                  const single = group.rows[0];
                   return (
-                    <tr
-                      key={`${p.sku}-${p.location}-${p.hold}`}
-                      className={selected === p.sku ? "selected" : ""}
-                    >
-                      <td data-label={t("Item", "Barang")}>
-                        <button
-                          className="row-select"
-                          onClick={() => setSelected(p.sku)}
-                          aria-pressed={selected === p.sku}
+                    <React.Fragment key={group.key}>
+                      <tr className={selected === group.sku ? "selected" : ""}>
+                        <td>
+                          <div className="stock-item-cell">
+                            {multiple ? (
+                              <button
+                                className="stock-expand"
+                                aria-expanded={isOpen}
+                                aria-controls={detailId}
+                                aria-label={t(
+                                  `${isOpen ? "Collapse" : "Expand"} stock positions for ${group.product.name}, ${group.sku}`,
+                                  `${isOpen ? "Tutup" : "Buka"} posisi stok ${group.product.name}, ${group.sku}`,
+                                )}
+                                onClick={() =>
+                                  setExpanded((current) => {
+                                    const next = new Set(current);
+                                    if (next.has(group.key))
+                                      next.delete(group.key);
+                                    else next.add(group.key);
+                                    return next;
+                                  })
+                                }
+                              >
+                                {isOpen ? (
+                                  <CaretDown size={16} aria-hidden="true" />
+                                ) : (
+                                  <CaretRight size={16} aria-hidden="true" />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="stock-expand-spacer" />
+                            )}
+                            <button
+                              className="row-select"
+                              onClick={() => setSelected(group.sku)}
+                              aria-pressed={selected === group.sku}
+                            >
+                              <ProductName product={group.product} />
+                              <CheckCircle
+                                size={16}
+                                className="table-selection-mark"
+                                data-selected={selected === group.sku}
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          {multiple
+                            ? t(
+                                `${group.locations.length} ${group.locations.length === 1 ? "location" : "locations"}`,
+                                `${group.locations.length} lokasi`,
+                              )
+                            : single.location}
+                        </td>
+                        <td>
+                          {group.conditions.length === 1 ? (
+                            renderCondition(single.condition)
+                          ) : (
+                            <span
+                              title={group.conditions
+                                .map(conditionLabel)
+                                .join(" / ")}
+                            >
+                              {t(
+                                `Mixed (${group.conditions.length})`,
+                                `Campuran (${group.conditions.length})`,
+                              )}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {multiple ? (
+                            <div className="stock-status-summary">
+                              <span className="muted">
+                                {t(
+                                  `${group.statusVariants} status ${group.statusVariants === 1 ? "variant" : "variants"}`,
+                                  `${group.statusVariants} variasi status`,
+                                )}
+                              </span>
+                              {group.statuses.includes("frozen") && (
+                                <span className="hold-label">
+                                  {t("Frozen", "Dibekukan")}
+                                </span>
+                              )}
+                              {group.statuses.some((s) =>
+                                s.startsWith("hold:"),
+                              ) && (
+                                <span className="hold-label">
+                                  {t("On hold", "Ditahan")}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            renderStatus(single)
+                          )}
+                        </td>
+                        {["reserved", "available"].map((key) => (
+                          <td key={key} className="numeric">
+                            {group.totals.map((total) => (
+                              <div key={total.unit}>
+                                {total[key]}
+                                {group.totals.length > 1 && (
+                                  <small> {unitLabel(total.unit)}</small>
+                                )}
+                              </div>
+                            ))}
+                          </td>
+                        ))}
+                        <td>
+                          {group.totals.length === 1
+                            ? unitLabel(group.totals[0].unit)
+                            : t("Mixed units", "Satuan berbeda")}
+                        </td>
+                      </tr>
+                      {multiple && (
+                        <tr
+                          className="stock-detail-row"
+                          hidden={!isOpen}
+                          id={detailId}
                         >
-                          <ProductName product={item} />
-                        </button>
-                      </td>
-                      <td data-label={t("Location", "Lokasi")}>{p.location}</td>
-                      <td data-label={t("Condition", "Kondisi")}>
-                        <Tag
-                          kind={
-                            p.condition === "good"
-                              ? "success"
-                              : p.condition === "not-good"
-                                ? "warning"
-                                : "neutral"
-                          }
-                        >
-                          {p.condition === "good"
-                            ? t("Good", "Bagus")
-                            : p.condition === "not-good"
-                              ? t("Not good", "Tidak bagus")
-                              : t("Not assessed yet", "Belum dicek")}
-                        </Tag>
-                        {p.hold && (
-                          <small className="hold-label">
-                            {p.hold === "awaiting-qc"
-                              ? t("Awaiting QC", "Menunggu QC")
-                              : t("On hold", "Ditahan")}
-                          </small>
-                        )}
-                        {p.frozen && (
-                          <small className="hold-label">
-                            {t("Frozen", "Dibekukan")}
-                          </small>
-                        )}
-                      </td>
-                      <td
-                        className="numeric"
-                        data-label={t("Reserved for orders", "Dipesan")}
-                      >
-                        {p.reserved}
-                      </td>
-                      <td
-                        className="numeric"
-                        data-label={t("Available", "Tersedia")}
-                      >
-                        {available(p)}
-                      </td>
-                      <td data-label={t("Unit", "Satuan")}>
-                        {t("units", "unit")}
-                      </td>
-                    </tr>
+                          <td />
+                          <td colSpan={6}>
+                            {isOpen && (
+                              <div className="stock-position-subview">
+                                <table
+                                  className="stock-detail-table"
+                                  aria-label={t(
+                                    `Stock positions for ${group.sku}`,
+                                    `Posisi stok ${group.sku}`,
+                                  )}
+                                >
+                                  <colgroup>
+                                    {stockColumnWidths.slice(1).map((width, index) => (
+                                      <col key={index} style={{ width: `${width / (100 - stockColumnWidths[0]) * 100}%` }} />
+                                    ))}
+                                  </colgroup>
+                                  <thead className="sr-only">
+                                    <tr>
+                                      {[
+                                        t("Location", "Lokasi"),
+                                        t("Condition", "Kondisi"),
+                                        t("Stock status", "Status stok"),
+                                        t("Reserved", "Dipesan"),
+                                        t("Available", "Tersedia"),
+                                        t("Unit", "Satuan"),
+                                      ].map((label, index) => (
+                                        <th
+                                          key={index}
+                                          scope="col"
+                                          className={
+                                            [3, 4].includes(index)
+                                              ? "numeric"
+                                              : ""
+                                          }
+                                        >
+                                          {label}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {group.rows.map((position, index) => (
+                                      <tr key={index}>
+                                        <th scope="row">{position.location}</th>
+                                        <td>
+                                          {renderCondition(position.condition)}
+                                        </td>
+                                        <td>{renderStatus(position)}</td>
+                                        <td className="numeric">
+                                          {position.reserved}
+                                        </td>
+                                        <td className="numeric">
+                                          {available(position)}
+                                        </td>
+                                        <td>
+                                          {unitLabel(
+                                            position.unit ||
+                                              group.product.unit ||
+                                              "units",
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
             </table>
-            {filtered.length === 0 && (
+            {result.totalItems === 0 && (
               <Empty
                 title={
                   positions.length
@@ -380,13 +635,7 @@ export function Stock({
                 }
                 action={
                   positions.length ? (
-                    <Button
-                      onClick={() => {
-                        setSearch("");
-                        setLoc("");
-                        setCondition("");
-                      }}
-                    >
+                    <Button onClick={clearFilters}>
                       {t("Clear filters", "Hapus filter")}
                     </Button>
                   ) : (
@@ -399,43 +648,63 @@ export function Stock({
             )}
           </div>
           <div className="stock-table-bottom">
-            <div className="pagination">
-              <span>
+            <div className="catalogue-pagination">
+              <span role="status">
                 {t(
-                  `Showing ${filtered.length} of ${positions.length} positions`,
-                  `Menampilkan ${filtered.length} dari ${positions.length} posisi`,
+                  `Items ${result.from}–${result.to} of ${result.totalItems} · Positions on this page: ${result.items.reduce((sum, item) => sum + item.rows.length, 0)} of ${result.totalPositions}${filtersActive ? ` matching filters (of ${result.scopedItems} items / ${result.scopedPositions} positions)` : ""}`,
+                  `Barang ${result.from}–${result.to} dari ${result.totalItems} · Posisi di halaman ini: ${result.items.reduce((sum, item) => sum + item.rows.length, 0)} dari ${result.totalPositions}${filtersActive ? ` sesuai filter (dari ${result.scopedItems} barang / ${result.scopedPositions} posisi)` : ""}`,
                 )}
               </span>
-              <div>
-                <Button
-                  disabled
-                  aria-label={t("Previous page", "Halaman sebelumnya")}
+              <Field label={t("Items per page", "Barang per halaman")}>
+                <select
+                  value={pageSize}
+                  onChange={(event) => setPageSize(Number(event.target.value))}
                 >
-                  <CaretLeft size={18} />
-                </Button>
-                <Button primary disabled aria-current="page">
-                  1
-                </Button>
+                  {[10, 25, 50].map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <nav aria-label={t("Stock item pages", "Halaman barang stok")}>
                 <Button
-                  disabled
-                  aria-label={t("Next page", "Halaman berikutnya")}
+                  aria-label={t(
+                    "Previous item page",
+                    "Halaman barang sebelumnya",
+                  )}
+                  disabled={result.page === 1}
+                  onClick={() => setPage(result.page - 1)}
                 >
-                  <CaretRight size={18} />
+                  <CaretLeft size={18} aria-hidden="true" />
                 </Button>
-              </div>
+                <span>
+                  {t(
+                    `Page ${result.page} of ${result.pages}`,
+                    `Halaman ${result.page} dari ${result.pages}`,
+                  )}
+                </span>
+                <Button
+                  aria-label={t("Next item page", "Halaman barang berikutnya")}
+                  disabled={result.page === result.pages}
+                  onClick={() => setPage(result.page + 1)}
+                >
+                  <CaretRight size={18} aria-hidden="true" />
+                </Button>
+              </nav>
             </div>
             <p className="muted footnote">
               {t(
-                "Reserved for orders remains on site until the shipment departs. Available excludes stock on hold.",
-                "Dipesan masih berada di gudang sampai pengiriman. Tersedia tidak termasuk stok yang ditahan.",
+                "Reserved remains on site until shipment. Available excludes frozen, held and non-pickable stock. Different units are shown separately.",
+                "Dipesan masih berada di gudang sampai pengiriman. Tersedia tidak mencakup stok dibekukan, ditahan, atau tidak layak diambil. Satuan berbeda ditampilkan terpisah.",
               )}
             </p>
-            <Notice title={t("Simulation data", "Data simulasi")}>
+            {authMode !== "oidc" && <Notice title={t("Simulation data", "Data simulasi")}>
               {t(
                 "All sample stock and trends are fictional and for demonstration purposes only.",
                 "Semua contoh stok dan tren adalah data fiktif untuk demonstrasi.",
               )}
-            </Notice>
+            </Notice>}
           </div>
         </Panel>
         <Panel className="analysis-panel">
@@ -496,92 +765,10 @@ export function Stock({
                   ],
                 ]}
               />
-              <div className="panel-heading">
-                <h2>{t("Item trends", "Tren barang")}</h2>
-                <span className="metric-label">
-                  {t("Shipped units", "Unit terkirim")}
-                </span>
-              </div>
               <p className="muted">
                 {warehouse} · {t("All locations", "Semua lokasi")}
               </p>
-              {selected === "SKU-A" && warehouse === MAIN_NAME ? (
-                <>
-                  <div className="trend-summary">
-                    <div>
-                      <span>{t("YTD shipped", "Terkirim YTD")}</span>
-                      <strong>1,100 {t("units", "unit")}</strong>
-                      <small>1 Jan – 28 Oct 2026</small>
-                    </div>
-                    <div>
-                      <b>+10.0%</b>
-                      <small>
-                        {t("vs same period 2025", "vs periode sama 2025")}
-                      </small>
-                    </div>
-                  </div>
-                  <div className="panel-heading chart-heading">
-                    <h3>
-                      {t("Monthly shipped units", "Unit terkirim per bulan")}
-                    </h3>
-                    <Tag>{t("Oct partial", "Okt parsial")}</Tag>
-                  </div>
-                  <TrendChart
-                    key={document.documentElement.dataset.theme}
-                    locale={locale}
-                  />
-                  <Summary
-                    items={[
-                      [t("MoM", "MoM"), "+20.0% · Sep 120 / Aug 100"],
-                      [
-                        t("YoY", "YoY"),
-                        "+25.0% · Sep 2026: 120 / Sep 2025: 96",
-                      ],
-                    ]}
-                  />
-                  <small className="muted">
-                    {t(
-                      "Last complete month: Sep 2026. Historical fixture through 28 Oct 2026.",
-                      "Bulan terakhir lengkap: Sep 2026. Data contoh historis sampai 28 Okt 2026.",
-                    )}
-                  </small>
-                  <details className="chart-data">
-                    <summary>
-                      {t("View chart data", "Lihat data grafik")}
-                    </summary>
-                    <table>
-                      <caption>
-                        {t(
-                          "2026 shipped units; October is partial.",
-                          "Unit terkirim 2026; Oktober parsial.",
-                        )}
-                      </caption>
-                      <tbody>
-                        {months.map((m, i) => (
-                          <tr key={m}>
-                            <th scope="row">
-                              {m} 2026
-                              {i === 9 ? t(" (partial)", " (parsial)") : ""}
-                            </th>
-                            <td>
-                              {trend[i]} {t("units", "unit")}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </details>
-                </>
-              ) : (
-                <Empty
-                  title={t("No comparison data", "Data pembanding belum ada")}
-                >
-                  {t(
-                    "No shipment history is included for this item and warehouse.",
-                    "Riwayat pengiriman contoh belum tersedia untuk barang dan gudang ini.",
-                  )}
-                </Empty>
-              )}
+              <ShipmentTrends summary={data.shipments} sku={selected} locale={locale} />
               <div className="analysis-footer">
                 <small className="muted">
                   {t(
@@ -725,4 +912,3 @@ export function Stock({
     </>
   );
 }
-const MAIN_NAME = "Main Warehouse";

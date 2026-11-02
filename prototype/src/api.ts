@@ -10,6 +10,7 @@ export interface SessionUser {
   verified: boolean;
 }
 export interface Session {
+  companyName?: string;
   mode: "development-demo" | "oidc";
   csrfToken: string;
   user: SessionUser | null;
@@ -106,12 +107,11 @@ export async function deleteItem(
   warehouse: string,
   sku: string,
   version: number,
-  reason: string,
 ) {
   await request("/api/edit", {
     type: "delete-master",
     warehouse,
-    payload: { sku, version, reason },
+    payload: { sku, version },
   });
 }
 export async function requestAccess(name: string, email: string) {
@@ -178,9 +178,10 @@ export function uiSnapshot(value: any): any {
     );
   return value;
 }
-export async function snapshot(warehouse: string) {
+export async function snapshot(warehouse: string, options: Record<string, string | number | boolean> = {}) {
+  const params = new URLSearchParams(Object.entries({ ...options, requestKey: JSON.stringify(options) }).map(([key, value]) => [key, String(value)]));
   return uiSnapshot(
-    await request(`/api/workspaces/${encodeURIComponent(warehouse)}/snapshot`),
+    await request(`/api/workspaces/${encodeURIComponent(warehouse)}/snapshot?${params}`),
   );
 }
 export async function exportLedger(
@@ -336,10 +337,11 @@ export async function persistEdit(
 ): Promise<void> {
   const edit = async (type: string, payload: any) =>
     request("/api/edit", { type, warehouse, payload: wireQuantities(payload) });
+  const previousProducts = new Map(before.products.map((p: any) => [p.sku, p]));
   const product = next.products.find(
     (p: any) =>
       JSON.stringify(p) !==
-      JSON.stringify(before.products.find((old: any) => old.sku === p.sku)),
+      JSON.stringify(previousProducts.get(p.sku)),
   );
   if (product) {
     const label = next.labelHistory.find(
@@ -416,20 +418,35 @@ export async function persistEdit(
 }
 export function subscribe(warehouse: string, onChange: () => void): () => void {
   let stopped = false;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let changeTimer: ReturnType<typeof setTimeout> | undefined;
   const connection: HubConnection = new HubConnectionBuilder()
     .withUrl("/hubs/workspace")
     .withAutomaticReconnect()
     .build();
-  connection.on("WorkspaceChanged", onChange);
-  connection.onreconnected(() => connection.invoke("JoinWorkspace", warehouse));
-  connection
-    .start()
-    .then(() => !stopped && connection.invoke("JoinWorkspace", warehouse))
-    .catch(() => {
-      /* Manual refresh stays available while the connection is offline. */
-    });
+  connection.on("WorkspaceChanged", () => {
+    clearTimeout(changeTimer);
+    if (!stopped) changeTimer = setTimeout(onChange, 200);
+  });
+  connection.onreconnected(async () => {
+    if (stopped) return;
+    await connection.invoke("JoinWorkspace", warehouse);
+    if (!stopped) onChange();
+  });
+  const connect = () => {
+    connection.start()
+      .then(async () => {
+        if (stopped) return;
+        await connection.invoke("JoinWorkspace", warehouse);
+        if (!stopped) onChange();
+      })
+      .catch(() => { if (!stopped) retryTimer = setTimeout(connect, 5000); });
+  };
+  connect();
   return () => {
     stopped = true;
+    clearTimeout(retryTimer);
+    clearTimeout(changeTimer);
     void connection.stop();
   };
 }

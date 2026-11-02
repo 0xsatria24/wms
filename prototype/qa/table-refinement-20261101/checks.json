@@ -1,0 +1,228 @@
+{
+  "checks": [
+    "Enter selects SKU-B; one row selected and detail scope names SKU-B. Available sorting toggles ascending/descending.",
+    "1280px viewport: no document/header overflow. Phone: mobile sort changes first item to SKU-C, hidden header buttons are removed from focus order, item alignment remains left.",
+    "Item Master rows remain 56px, no empty thumbnail boxes; Edit opens and Escape closes without saving. Unit conversion factors are right aligned.",
+    "Access keeps centered Role/Warehouse access/Status/Actions headers and values, one-line role/status labels, and no page overflow.",
+    "Dark theme and Bahasa Indonesia stock table inspected; semantic warning text, quieter success status, selection markers and numeric alignment retained.",
+    "User spacing correction: stock rows 48px; Item/Condition columns narrowed, Reserved/Available widened with a subtle separator; numeric sort label ends at the quantity edge. At 1280px no header/page overflow; phone remains 375px wide with a 44px selection target."
+  ],
+  "stock": {
+    "client": 1425,
+    "headers": [
+      {
+        "align": "left",
+        "label": "Item"
+      },
+      {
+        "align": "left",
+        "label": "Location"
+      },
+      {
+        "align": "left",
+        "label": "Condition"
+      },
+      {
+        "align": "right",
+        "label": "Reserved"
+      },
+      {
+        "align": "right",
+        "label": "Available"
+      },
+      {
+        "align": "left",
+        "label": "Unit"
+      }
+    ],
+    "panel": {
+      "height": 575.84375,
+      "width": 788.6666870117188,
+      "x": 262,
+      "y": 164.1666717529297
+    },
+    "rowHeights": [
+      56,
+      56,
+      56,
+      56,
+      56
+    ],
+    "scroll": 1425,
+    "selection": "Details: SKU-A · All locations",
+    "thumbnails": 0,
+    "viewport": {
+      "height": 1000,
+      "width": 1440
+    }
+  },
+  "finalStock": {
+    "headers": [
+      {
+        "client": 166,
+        "scroll": 166,
+        "text": "Item",
+        "width": 166
+      },
+      {
+        "client": 106,
+        "scroll": 106,
+        "text": "Location",
+        "width": 106
+      },
+      {
+        "client": 136,
+        "scroll": 136,
+        "text": "Condition",
+        "width": 136
+      },
+      {
+        "client": 128,
+        "scroll": 128,
+        "text": "Reserved",
+        "width": 129
+      },
+      {
+        "client": 151,
+        "scroll": 151,
+        "text": "Available",
+        "width": 151
+      },
+      {
+        "client": 68,
+        "scroll": 68,
+        "text": "Unit",
+        "width": 68
+      }
+    ],
+    "panel": {
+      "height": 535.84375,
+      "width": 788.6666870117188,
+      "x": 262,
+      "y": 164.1666717529297
+    },
+    "rowHeights": [
+      48,
+      48,
+      48,
+      48,
+      48
+    ],
+    "scroll": 1425,
+    "width": 1425
+  },
+  "smallDesktop": {
+    "headers": [
+      {
+        "client": 131,
+        "scroll": 131,
+        "text": "Item"
+      },
+      {
+        "client": 84,
+        "scroll": 84,
+        "text": "Location"
+      },
+      {
+        "client": 107,
+        "scroll": 107,
+        "text": "Condition"
+      },
+      {
+        "client": 101,
+        "scroll": 101,
+        "text": "Reserved"
+      },
+      {
+        "client": 119,
+        "scroll": 119,
+        "text": "Available"
+      },
+      {
+        "client": 54,
+        "scroll": 54,
+        "text": "Unit"
+      }
+    ],
+    "rows": [
+      48,
+      48,
+      48,
+      48,
+      48
+    ],
+    "scroll": 1265,
+    "width": 1265
+  },
+  "phone": {
+    "scroll": 375,
+    "selectHeight": 44,
+    "sortVisible": "block",
+    "width": 375
+  },
+  "master": {
+    "emptyThumbnails": 0,
+    "overflow": false,
+    "rowHeights": [
+      56,
+      56,
+      56,
+      56
+    ]
+  },
+  "access": {
+    "badgeLines": [
+      {
+        "lines": 1,
+        "text": "admin"
+      },
+      {
+        "lines": 1,
+        "text": "Active"
+      },
+      {
+        "lines": 1,
+        "text": "operator"
+      },
+      {
+        "lines": 1,
+        "text": "Active"
+      },
+      {
+        "lines": 1,
+        "text": "supervisor"
+      },
+      {
+        "lines": 1,
+        "text": "Active"
+      }
+    ],
+    "headers": [
+      {
+        "align": "left",
+        "label": "Name"
+      },
+      {
+        "align": "left",
+        "label": "Work email"
+      },
+      {
+        "align": "center",
+        "label": "Role"
+      },
+      {
+        "align": "center",
+        "label": "Warehouse access"
+      },
+      {
+        "align": "center",
+        "label": "Status"
+      },
+      {
+        "align": "center",
+        "label": "Actions"
+      }
+    ],
+    "overflow": false
+  }
+}

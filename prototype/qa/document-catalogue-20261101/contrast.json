@@ -1,0 +1,79 @@
+[
+  {
+    "role": "text",
+    "foreground": "#172536",
+    "background": "#ffffff",
+    "ratio": 15.506,
+    "pass": true
+  },
+  {
+    "role": "muted",
+    "foreground": "#526176",
+    "background": "#ffffff",
+    "ratio": 6.306,
+    "pass": true
+  },
+  {
+    "role": "header",
+    "foreground": "#172536",
+    "background": "#f3f6fa",
+    "ratio": 14.305,
+    "pass": true
+  },
+  {
+    "role": "selected text",
+    "foreground": "#172536",
+    "background": "#e4f5ff",
+    "ratio": 13.884,
+    "pass": true
+  },
+  {
+    "role": "selected label",
+    "foreground": "#005fcc",
+    "background": "#e4f5ff",
+    "ratio": 5.359,
+    "pass": true
+  },
+  {
+    "role": "neutral status",
+    "foreground": "#526176",
+    "background": "#f3f6fa",
+    "ratio": 5.817,
+    "pass": true
+  },
+  {
+    "role": "warning",
+    "foreground": "#774700",
+    "background": "#fff2da",
+    "ratio": 7.062,
+    "pass": true
+  },
+  {
+    "role": "dark text",
+    "foreground": "#edf3fa",
+    "background": "#1b2938",
+    "ratio": 13.232,
+    "pass": true
+  },
+  {
+    "role": "dark muted",
+    "foreground": "#b8c8dc",
+    "background": "#1b2938",
+    "ratio": 8.68,
+    "pass": true
+  },
+  {
+    "role": "dark selected",
+    "foreground": "#85bdff",
+    "background": "#183d5e",
+    "ratio": 5.739,
+    "pass": true
+  },
+  {
+    "role": "dark warning",
+    "foreground": "#ffd590",
+    "background": "#453419",
+    "ratio": 8.629,
+    "pass": true
+  }
+]

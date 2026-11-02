@@ -1,0 +1,61 @@
+{
+  "cellPadding": "2px 12px",
+  "columnWidths": [
+    {
+      "label": "Item",
+      "width": 231.39584350585935,
+      "align": "left"
+    },
+    {
+      "label": "Location",
+      "width": 195.7916717529297,
+      "align": "left"
+    },
+    {
+      "label": "Condition",
+      "width": 106.79167175292967,
+      "align": "left"
+    },
+    {
+      "label": "Reserved",
+      "width": 97.89583587646484,
+      "align": "right"
+    },
+    {
+      "label": "Available",
+      "width": 186.89584350585935,
+      "align": "right"
+    },
+    {
+      "label": "Unit",
+      "width": 71.22917175292969,
+      "align": "left"
+    }
+  ],
+  "footerBottomMargin": "0px",
+  "footerGaps": [
+    8,
+    11.999958038330078
+  ],
+  "headerHeight": 44.33333587646485,
+  "overflow": false,
+  "panel": {
+    "height": 511.1770935058594,
+    "width": 922,
+    "x": 23.33333396911621,
+    "y": 178
+  },
+  "rowHeights": [
+    48.66666793823242,
+    48.66666793823242,
+    48.66666793823242,
+    48.66666793823242,
+    48.66666793823242
+  ],
+  "tableFooterGap": 12.000030517578123,
+  "viewport": {
+    "dpr": 1.0000000298023224,
+    "height": 1000,
+    "width": 1340
+  }
+}

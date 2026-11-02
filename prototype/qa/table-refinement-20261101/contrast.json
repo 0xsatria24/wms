@@ -1,0 +1,79 @@
+[
+  {
+    "role": "text selected",
+    "foreground": "#172536",
+    "background": "#f0f5fa",
+    "ratio": 14.137,
+    "pass": true
+  },
+  {
+    "role": "muted selected",
+    "foreground": "#526176",
+    "background": "#f0f5fa",
+    "ratio": 5.749,
+    "pass": true
+  },
+  {
+    "role": "selected icon",
+    "foreground": "#005fcc",
+    "background": "#f0f5fa",
+    "ratio": 5.457,
+    "pass": true
+  },
+  {
+    "role": "good selected",
+    "foreground": "#19633b",
+    "background": "#f0f5fa",
+    "ratio": 6.627,
+    "pass": true
+  },
+  {
+    "role": "hold text",
+    "foreground": "#774700",
+    "background": "#f0f5fa",
+    "ratio": 7.129,
+    "pass": true
+  },
+  {
+    "role": "muted header",
+    "foreground": "#526176",
+    "background": "#f3f6fa",
+    "ratio": 5.817,
+    "pass": true
+  },
+  {
+    "role": "dark text selected",
+    "foreground": "#edf3fa",
+    "background": "#22364a",
+    "ratio": 11.095,
+    "pass": true
+  },
+  {
+    "role": "dark muted selected",
+    "foreground": "#b8c8dc",
+    "background": "#22364a",
+    "ratio": 7.278,
+    "pass": true
+  },
+  {
+    "role": "dark selected icon",
+    "foreground": "#85bdff",
+    "background": "#22364a",
+    "ratio": 6.326,
+    "pass": true
+  },
+  {
+    "role": "dark good",
+    "foreground": "#9bdeb7",
+    "background": "#22364a",
+    "ratio": 7.982,
+    "pass": true
+  },
+  {
+    "role": "dark hold",
+    "foreground": "#ffd590",
+    "background": "#22364a",
+    "ratio": 8.954,
+    "pass": true
+  }
+]

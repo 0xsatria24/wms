@@ -14,6 +14,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
         Require(actor.Role is "admin" or "supervisor" or "operator", "denied", 403);
         var p = request.Payload;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await RecoveryState.RequireWritable(db, ct);
         if (request.Type is "master" or "delete-master" or "packages" or "labelHistory" or "create-order")
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:catalog"}, 0))", ct);
         if (request.Type is "create-user" or "delete-user" or "access")
@@ -50,6 +51,8 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             var active = p.TryGetProperty("active", out var activeValue) && activeValue.GetBoolean();
             Require(active || !string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
             var image = p.TryGetProperty("image", out var imageValue) && imageValue.ValueKind == JsonValueKind.String ? imageValue.GetString() : null;
+            if (existing.Image is not null && image == $"/api/items/{Uri.EscapeDataString(sku)}/image?warehouse={Uri.EscapeDataString(actor.WarehouseId)}")
+                image = existing.Image;
             if (image is not null)
             {
                 Require(image.Length <= 7_000_000 && image.Contains(','), "image", 400);
@@ -191,12 +194,25 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             var settings = await db.Settings.SingleAsync(ct);
             settings.PartialAllowed = p.GetProperty("enabled").GetBoolean();
         }
-        else if (new[] { "packages", "labelHistory", "followups", "locationMaster", "unitMaster", "devices" }.Contains(request.Type))
+        else if (request.Type == "locationMaster")
+        {
+            Supervisor(actor);
+            var code = p.Text("name").Trim();
+            Require(code.Length is > 0 and <= 100 && !code.Contains('|'), "required", 400);
+            Require(!await db.Locations.AnyAsync(l => l.WarehouseId == actor.WarehouseId && l.Code.ToLower() == code.ToLower(), ct), "location-duplicate", 409);
+            db.Locations.Add(new Location { Id = $"{actor.WarehouseId}|{code}", WarehouseId = actor.WarehouseId, Code = code, Pickable = !p.TryGetProperty("pickable", out var pickable) || pickable.GetBoolean() });
+        }
+        else if (new[] { "packages", "labelHistory", "followups", "unitMaster", "devices" }.Contains(request.Type))
         {
             if (request.Type is not "followups" and not "labelHistory")
                 Supervisor(actor);
             if (request.Type == "devices")
                 Require(!string.IsNullOrWhiteSpace(p.Text("id")) && p.Text("id").Length <= 100, "required", 400);
+            if (request.Type == "unitMaster")
+            {
+                Require(p.Text("name").Trim().Length is > 0 and <= 100, "required", 400);
+                p.Quantity("factor");
+            }
             var id = request.Type == "packages" ? $"package|{p.Text("id")}" : request.Type == "devices" ? $"device|{p.Text("id")}" : $"{request.Type}|{Guid.NewGuid():N}";
             var record = await db.SupportingRecords.SingleOrDefaultAsync(r => r.Id == id && r.WarehouseId == actor.WarehouseId, ct);
             if (request.Type == "packages")

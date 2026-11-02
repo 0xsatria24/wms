@@ -1,5 +1,6 @@
 services:
   db:
+    restart: unless-stopped
     image: postgres:18.4
     environment:
       POSTGRES_DB: wms
@@ -12,27 +13,72 @@ services:
       timeout: 5s
       retries: 12
   api:
+    restart: unless-stopped
     build: {context: ., dockerfile: backend/Dockerfile.api}
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Wms: Host=db;Database=wms;Username=wms;Password=${POSTGRES_PASSWORD}
-      Database__MigrateOnStartup: "true"
+      Database__MigrateOnStartup: ${WMS_MIGRATE_ON_STARTUP:-false}
       Oidc__Authority: ${OIDC_AUTHORITY:?Set OIDC_AUTHORITY}
       Oidc__ClientId: ${OIDC_CLIENT_ID:?Set OIDC_CLIENT_ID}
       Oidc__ClientSecret: ${OIDC_CLIENT_SECRET}
+      AllowedHosts: ${WMS_PUBLIC_HOST:?Set WMS_PUBLIC_HOST};localhost;127.0.0.1;api
+      ReverseProxy__KnownProxies: ${WEB_PROXY_IP:-172.30.64.10}
+      DataProtection__KeyPath: /var/wms/keys
+      Company__Name: ${WMS_COMPANY_NAME:?Set WMS_COMPANY_NAME}
+      Erp__Enabled: ${ERP_ENABLED:-false}
+      Erp__DispatchPaused: ${ERP_DISPATCH_PAUSED:-true}
+      ErpIngress__Enabled: ${ERP_INGRESS_ENABLED:-false}
+      ErpIngress__Authority: ${ERP_INGRESS_AUTHORITY:-}
+      ErpIngress__Audience: ${ERP_INGRESS_AUDIENCE:-}
+    volumes: [data-protection:/var/wms/keys]
+    healthcheck:
+      test: [CMD, dotnet, Wms.Api.dll, --healthcheck]
+      interval: 15s
+      timeout: 8s
+      retries: 3
+      start_period: 30s
     depends_on: {db: {condition: service_healthy}}
   worker:
+    restart: unless-stopped
     build: {context: ., dockerfile: backend/Dockerfile.worker}
     environment:
       ConnectionStrings__Wms: Host=db;Database=wms;Username=wms;Password=${POSTGRES_PASSWORD}
       Erp__Endpoint: ${ERP_ENDPOINT:-}
+      Erp__Enabled: ${ERP_ENABLED:-false}
+      Erp__StatusEndpoint: ${ERP_STATUS_ENDPOINT:-}
+      Erp__DispatchPaused: ${ERP_DISPATCH_PAUSED:-true}
+      Erp__BacklogAlertMinutes: ${ERP_BACKLOG_ALERT_MINUTES:-15}
       Erp__SupportsIdempotency: ${ERP_SUPPORTS_IDEMPOTENCY:-false}
       Erp__Protocol: ${ERP_PROTOCOL:-}
       Erp__BearerToken: ${ERP_BEARER_TOKEN:-}
-    depends_on: [api]
+    healthcheck:
+      test: [CMD, dotnet, Wms.Worker.dll, --healthcheck]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on: {api: {condition: service_healthy}}
   web:
+    restart: unless-stopped
     build: {context: ., dockerfile: prototype/Dockerfile}
-    ports: ["127.0.0.1:8080:8080"]
-    depends_on: [api]
+    ports: ["${WMS_BIND_ADDRESS:-127.0.0.1}:80:8080", "${WMS_BIND_ADDRESS:-127.0.0.1}:443:8443"]
+    volumes:
+      - ${TLS_CERT_DIRECTORY:?Set TLS_CERT_DIRECTORY}:/run/tls:ro
+    networks:
+      default:
+        ipv4_address: ${WEB_PROXY_IP:-172.30.64.10}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/health/live]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on: {api: {condition: service_healthy}}
 volumes:
   postgres-data:
+  data-protection:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${WMS_SUBNET:-172.30.64.0/24}

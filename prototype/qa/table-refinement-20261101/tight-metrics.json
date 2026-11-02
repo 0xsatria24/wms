@@ -1,0 +1,55 @@
+{
+  "headers": [
+    {
+      "client": 166,
+      "scroll": 166,
+      "text": "Item",
+      "width": 166
+    },
+    {
+      "client": 106,
+      "scroll": 106,
+      "text": "Location",
+      "width": 106
+    },
+    {
+      "client": 136,
+      "scroll": 136,
+      "text": "Condition",
+      "width": 136
+    },
+    {
+      "client": 128,
+      "scroll": 128,
+      "text": "Reserved",
+      "width": 129
+    },
+    {
+      "client": 151,
+      "scroll": 151,
+      "text": "Available",
+      "width": 151
+    },
+    {
+      "client": 68,
+      "scroll": 68,
+      "text": "Unit",
+      "width": 68
+    }
+  ],
+  "panel": {
+    "height": 535.84375,
+    "width": 788.6666870117188,
+    "x": 262,
+    "y": 164.1666717529297
+  },
+  "rowHeights": [
+    48,
+    48,
+    48,
+    48,
+    48
+  ],
+  "scroll": 1425,
+  "width": 1425
+}

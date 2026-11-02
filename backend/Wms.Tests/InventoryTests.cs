@@ -224,10 +224,12 @@ public sealed class InventoryTests(PostgresFixture postgres)
                 location = "A-01"
             }, null), Key());
         await using var query = new WmsDb(options);
-        var snapshot = await new SnapshotQuery(query, new AccessService(query)).Read(new ActingPrincipal("operator", "main", "operator"), CancellationToken.None);
+        var snapshot = await new SnapshotQuery(query).Read(new ActingPrincipal("operator", "main", "operator"), CancellationToken.None);
         var json = JsonSerializer.SerializeToElement(snapshot);
         var count = json.GetProperty("counts").EnumerateArray().Single();
         Assert.False(count.TryGetProperty("expected", out _));
         Assert.Equal("A-01", count.GetProperty("location").GetString());
+        Assert.DoesNotContain(json.GetProperty("positions").EnumerateArray(), p => p.GetProperty("sku").GetString() == "SKU-A" && p.GetProperty("location").GetString() == "A-01");
+        Assert.DoesNotContain(json.GetProperty("ledger").EnumerateArray(), p => p.GetProperty("sku").GetString() == "SKU-A" && p.GetProperty("location").GetString() == "A-01");
     }
 }

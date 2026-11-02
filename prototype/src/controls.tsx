@@ -4,6 +4,7 @@ import {
   useText,
   Button,
   Field,
+  Lookup,
   Notice,
   Panel,
   Tag,
@@ -17,6 +18,8 @@ import {
 } from "./ui.tsx";
 import { MAIN } from "./fixtures";
 import { exportLedger } from "./api";
+import { productSuggestions, valueSuggestions } from "./autocomplete-model";
+import { useServerCatalogue } from "./server-catalogue";
 
 function LabelPreview({ code, name, labelRef }) {
   useEffect(() => {
@@ -54,16 +57,22 @@ export function Controls({
   ask,
   flash,
   checkPending,
+  setCatalogueQuery,
+  authMode,
 }) {
   const t = useText();
   const [query, setQuery] = useState("");
-  const [sku, setSku] = useState(data.focusSku || "SKU-A");
+  const [sku, setSku] = useState(data.focusSku || data.products[0]?.sku || "");
   const [loc, setLoc] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [ledgerPage, setLedgerPage] = useState(1);
+  useServerCatalogue(data, setCatalogueQuery, { view: route, query, sku: ["movements", "tracking"].includes(route) ? sku : "", focusSku: sku, location: loc, from: fromDate, to: toDate, page: ledgerPage, pageSize: 25 });
+  useEffect(() => setLedgerPage(1), [sku, query, loc, fromDate, toDate]);
   const [tab, setTab] = useState("labels");
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [reason, setReason] = useState("");
   const [code, setCode] = useState("");
   const [reading, setReading] = useState(false);
@@ -75,7 +84,7 @@ export function Controls({
   const product = data.products.find((p) => p.sku === sku) || data.products[0];
   const ts = (stamp) =>
     new Date(stamp).toLocaleString(undefined, { timeZone: "Asia/Bangkok" });
-  const ledger = data.ledger.filter(
+  const ledgerSources = data.ledger.filter(
     (m) =>
       m.warehouse === warehouse &&
       m.sku === sku &&
@@ -87,22 +96,14 @@ export function Controls({
       (!toDate ||
         new Date(new Date(m.posted).getTime() + 7 * 3600000)
           .toISOString()
-          .slice(0, 10) <= toDate) &&
-      `${m.source} ${m.kind} ${m.id} ${m.transaction}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
+          .slice(0, 10) <= toDate),
   );
-  const itemSelect = (
-    <Field label={t("Item", "Barang")}>
-      <select value={sku} onChange={(e) => setSku(e.target.value)}>
-        {data.products.map((p) => (
-          <option key={p.sku} value={p.sku}>
-            {p.sku} · {p.name}
-          </option>
-        ))}
-      </select>
-    </Field>
+  const ledger = ledgerSources.filter((m) =>
+    `${m.source} ${m.kind} ${m.id} ${m.transaction}`
+      .toLowerCase()
+      .includes(query.toLowerCase()),
   );
+  const itemSelect = <Field label={t("Item", "Barang")} value={sku} onValueChange={setSku} suggestions={productSuggestions(data.products)} />;
   const titleColumns = [
     { key: "id", label: t("Reference", "Referensi") },
     { key: "type", label: t("Type", "Jenis") },
@@ -114,8 +115,9 @@ export function Controls({
   )
     return (
       <Panel>
+        <Field label={t("Find item / SKU", "Cari barang / SKU")} value={sku} onValueChange={setSku} suggestions={productSuggestions(data.products)} />
         <Empty
-          title={t("No item master data yet", "Belum ada master barang")}
+          title={sku.trim() ? t("No matching item", "Barang tidak ditemukan") : t("No item master data yet", "Belum ada master barang")}
           action={
             <Button onClick={() => go("master")}>
               {t("Open item master", "Buka master barang")}
@@ -248,15 +250,15 @@ export function Controls({
             </div>
             <Notice>
               {t(
-                "Retry schedules the same event. Transport acknowledgement and the ERP business result remain separate. Stock is not reposted. The ERP adapter is not configured.",
-                "Retry menjadwalkan event yang sama. Ack transport dan hasil bisnis ERP tetap terpisah. Stok tidak dicatat ulang. Adapter ERP belum dikonfigurasi.",
+                "Retry schedules the original event. Transport acknowledgement and the ERP business result remain separate. Stock is not reposted.",
+                "Retry menjadwalkan event asli. Ack transport dan hasil bisnis ERP tetap terpisah. Stok tidak dicatat ulang.",
               )}
             </Notice>
           </Panel>
         )}
         {modal && (
           <Modal
-            title={t("Event payload (simulation)", "Isi event (simulasi)")}
+            title={t("Event payload", "Isi event")}
             onClose={() => setModal(null)}
           >
             <pre>
@@ -273,23 +275,30 @@ export function Controls({
         <div className="filter-bar">
           {itemSelect}
           <Field label={t("Location", "Lokasi")}>
-            <select value={loc} onChange={(e) => setLoc(e.target.value)}>
-              <option value="">{t("All locations", "Semua lokasi")}</option>
-              {[
-                ...new Set<string>(
+            <Lookup
+              value={loc}
+              onValueChange={setLoc}
+              options={[
+                { value: "", label: t("All locations", "Semua lokasi") },
+                ...valueSuggestions(
                   data.positions
-                    .filter((p) => p.warehouse === warehouse)
-                    .map((p) => p.location),
+                    .filter((position) => position.warehouse === warehouse)
+                    .map((position) => position.location),
                 ),
-              ].map((l) => (
-                <option key={l}>{l}</option>
-              ))}
-            </select>
+              ]}
+            />
           </Field>
           <Field
             label={t("Search source document", "Cari dokumen sumber")}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            suggestions={valueSuggestions(
+              ledgerSources.flatMap((movement) => [
+                movement.source,
+                movement.id,
+                movement.transaction,
+              ]),
+            )}
+            onValueChange={setQuery}
             type="search"
           />
           <Field
@@ -350,6 +359,11 @@ export function Controls({
             { key: "user", label: t("User", "Pengguna") },
           ]}
         />
+        {data.ledgerPage && <div className="form-actions">
+          <Button disabled={data.ledgerPage.page <= 1} onClick={() => setLedgerPage(data.ledgerPage.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button>
+          <span>{t(`Page ${data.ledgerPage.page} of ${data.ledgerPage.pages} · ${data.ledgerPage.total} movements`, `Halaman ${data.ledgerPage.page} dari ${data.ledgerPage.pages} · ${data.ledgerPage.total} mutasi`)}</span>
+          <Button disabled={data.ledgerPage.page >= data.ledgerPage.pages} onClick={() => setLedgerPage(data.ledgerPage.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button>
+        </div>}
         <div className="section-actions">
           <Button
             onClick={() =>
@@ -500,7 +514,7 @@ export function Controls({
           "Integration events awaiting a result",
           "Event integrasi menunggu hasil",
         ),
-        count: data.events.filter(
+        count: data.operationalTotals?.erp ?? data.events.filter(
           (e) =>
             (e.warehouse || MAIN) === warehouse && e.business !== "accepted",
         ).length,
@@ -521,7 +535,7 @@ export function Controls({
       {
         id: "FREEZE",
         type: t("Open location freezes", "Pembekuan lokasi terbuka"),
-        count: data.counts.filter(
+        count: data.operationalTotals?.freezes ?? data.counts.filter(
           (c) => c.warehouse === warehouse && c.status !== "closed",
         ).length,
         target: "count",
@@ -529,6 +543,9 @@ export function Controls({
     ];
     return (
       <div className="stack">
+        <Notice kind={data.erpDelivery?.enabled && !data.erpDelivery?.paused ? "info" : "warning"}>
+          {data.erpDelivery?.enabled ? data.erpDelivery?.paused ? t("ERP delivery is held. Complete reconciliation before releasing the outbox.", "Pengiriman ERP ditahan. Selesaikan rekonsiliasi sebelum melepas outbox.") : t("ERP delivery is enabled. Monitor pending business results below.", "Pengiriman ERP aktif. Pantau hasil bisnis tertunda di bawah.") : t("ERP delivery is disabled. WMS events remain queued.", "Pengiriman ERP nonaktif. Event WMS tetap dalam antrean.")}
+        </Notice>
         <Panel title={t("Open operational cases", "Kasus operasional terbuka")}>
           <DataTable
             label={t("Operational queues", "Antrean operasional")}
@@ -558,7 +575,7 @@ export function Controls({
             items={[
               [
                 t("Backup evidence", "Bukti backup"),
-                t("Not available", "Belum tersedia"),
+                data.backupEvidence?.completedAt ? new Date(data.backupEvidence.completedAt).toLocaleString() : t("Not available", "Belum tersedia"),
               ],
               [
                 t("Restore drill", "Latihan restore"),
@@ -724,9 +741,7 @@ export function Controls({
                   {t("Last scan observation", "Pengamatan scan terakhir")}
                 </h3>
                 <p>
-                  {sku === "SKU-A" && warehouse === MAIN
-                    ? "Gate 02 · 29 Oct 2026 11:03"
-                    : t("No observation available", "Belum ada pengamatan")}
+                  {t("No observation available", "Belum ada pengamatan")}
                 </p>
                 <Tag>{t("Observation only", "Hanya pengamatan")}</Tag>
               </div>
@@ -877,7 +892,8 @@ export function Controls({
               onClick={() => {
                 setModal({
                   kind: "package",
-                  qty: pkg.items.find((i) => i.sku === "SKU-A")?.qty || 0,
+                  sku: pkg.items[0]?.sku || "",
+                  qty: pkg.items[0]?.qty || 0,
                 });
                 setReason("");
               }}
@@ -894,8 +910,9 @@ export function Controls({
         ) : (
           <>
             <DataTable
-              label={t("Registered demo devices", "Perangkat demo terdaftar")}
-              rows={[
+              label={t("Registered devices", "Perangkat terdaftar")}
+              empty={t("No devices registered", "Belum ada perangkat terdaftar")}
+              rows={authMode === "oidc" ? [] : [
                 {
                   id: "SCANNER-SIM-01",
                   type: "Barcode",
@@ -956,8 +973,10 @@ export function Controls({
             ) : (
               <form
                 className="stack"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
+                  if (saving) return;
+                  let saved;
                   if (modal.kind === "replace") {
                     if (
                       data.products.some(
@@ -976,14 +995,15 @@ export function Controls({
                     if (!/^[\x20-\x7E]+$/.test(code)) {
                       flash(
                         t(
-                          "Use printable ASCII characters for this Code 128 demo.",
-                          "Gunakan karakter ASCII tercetak untuk demo Code 128 ini.",
+                          "Use printable ASCII characters for Code 128.",
+                          "Gunakan karakter ASCII tercetak untuk Code 128.",
                         ),
                         "error",
                       );
                       return;
                     }
-                    setData((s) => ({
+                    setSaving(true);
+                    saved = await setData((s) => ({
                       ...s,
                       products: s.products.map((p) =>
                         p.sku === sku ? { ...p, barcode: code } : p,
@@ -1002,8 +1022,10 @@ export function Controls({
                         ...s.labelHistory,
                       ],
                     }));
-                  } else
-                    setData((s) => ({
+                  } else {
+                    if (!pkg.items.some((item) => item.sku === modal.sku)) return;
+                    setSaving(true);
+                    saved = await setData((s) => ({
                       ...s,
                       packages: s.packages.map((p) =>
                         p.id === pkg.id
@@ -1012,7 +1034,7 @@ export function Controls({
                               version: p.version + 1,
                               reason,
                               items: p.items.map((i) =>
-                                i.sku === "SKU-A"
+                                i.sku === modal.sku
                                   ? { ...i, qty: Number(modal.qty) }
                                   : i,
                               ),
@@ -1020,11 +1042,14 @@ export function Controls({
                           : p,
                       ),
                     }));
+                  }
+                  setSaving(false);
+                  if (saved === false) return;
                   setModal(null);
                   flash(
                     t(
-                      "Identification change saved locally. Stock is unchanged.",
-                      "Perubahan identifikasi tersimpan lokal. Stok tetap.",
+                      "Identification change saved. Stock is unchanged.",
+                      "Perubahan identifikasi tersimpan. Stok tetap.",
                     ),
                   );
                 }}
@@ -1037,20 +1062,28 @@ export function Controls({
                     required
                   />
                 ) : (
-                  <Field
-                    label={t(
-                      "SKU-A quantity in carton",
-                      "Jumlah SKU-A di karton",
-                    )}
-                    type="number"
-                    min="0"
-                    step="1"
-                    required
-                    value={modal.qty}
-                    onChange={(e) =>
-                      setModal({ ...modal, qty: e.target.value })
-                    }
-                  />
+                  <>
+                    <Field label={t("Carton item", "Barang dalam karton")}>
+                      <Lookup
+                        value={modal.sku}
+                        options={pkg.items.map((item) => ({ value: item.sku, label: item.sku }))}
+                        onValueChange={(value) => setModal({
+                          ...modal,
+                          sku: value,
+                          qty: pkg.items.find((item) => item.sku === value)?.qty || 0,
+                        })}
+                      />
+                    </Field>
+                    <Field
+                      label={t("Quantity in carton", "Jumlah dalam karton")}
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                      value={modal.qty}
+                      onChange={(e) => setModal({ ...modal, qty: e.target.value })}
+                    />
+                  </>
                 )}
                 <Field
                   label={t("Reason (required)", "Alasan (wajib)")}
@@ -1058,7 +1091,7 @@ export function Controls({
                   onChange={(e) => setReason(e.target.value)}
                   required
                 />
-                <Button primary type="submit">
+                <Button primary type="submit" disabled={saving}>
                   {t("Confirm mapping change", "Konfirmasi perubahan pemetaan")}
                 </Button>
               </form>

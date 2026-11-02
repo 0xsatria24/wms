@@ -1,10 +1,15 @@
 import React, { useState } from "react";
 import { Barcode, ArrowRight, Plus } from "@phosphor-icons/react";
 import { MAIN, SECONDARY, available } from "./fixtures";
+import { WorkQueue } from "./WorkQueue";
+import { productSuggestions } from "./autocomplete-model";
+import { useServerCatalogue } from "./server-catalogue";
+import { selectDraftDocument, captureDocumentDraft } from "./work-queue-model";
 import {
   useText,
   Button,
   Field,
+  Lookup,
   Notice,
   Panel,
   Tag,
@@ -26,24 +31,51 @@ export function Operations(props) {
     ask,
     flash,
     draft: d,
-    patchDraft: patch,
+    patchDraft: applyDraft,
   } = props;
+  let activeDocumentId: string | undefined;
+  const documentField = ["receiving", "transfers"].includes(route) ? "document" : ["quality", "putaway", "count"].includes(route) || route === "cancellation" && d.mode && d.mode !== "cancel" ? "task" : "order";
+  const patch = (changes) => applyDraft(captureDocumentDraft(d, changes, documentField, activeDocumentId));
   const t = useText();
+  useServerCatalogue(data, ["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) ? undefined : props.setCatalogueQuery, { view: route, focusSku: d.newOrderSku || d.sku || "", focusDocument: d[documentField] || "", page: props.catalogueQuery?.page || 1, pageSize: 25 });
+  const storageLocations = (data.locationMaster || []).filter((location) => (location.pickable ?? /^A-/.test(location.name)) && !location.frozen).map((location) => location.name);
+  const operationSku = d.sku || data.products.find((product) => product.active)?.sku || "";
+  const operationLocations = data.positions.filter((position) => position.sku === operationSku && position.warehouse === warehouse && available(position) > 0).map((position) => position.location);
+  const operationLocation = d.location || operationLocations[0] || storageLocations[0] || "";
+  const transferTargets = (data.warehouseMaster || user.warehouses.map((name) => ({ name }))).filter((row) => row.name !== warehouse);
+  const transferTarget = d.to || transferTargets[0]?.name || "";
+  const itemField = <Field label={t("Item / SKU", "Barang / SKU")} value={operationSku} onValueChange={(sku) => patch({ sku, scan: "", location: "", locationScan: "", source: "" })} suggestions={productSuggestions(data.products.filter((product) => product.active))} required />;
   const [newOrder, setNewOrder] = useState(false);
-  const [newQty, setNewQty] = useState("10");
+  const newQty = d.newOrderQty ?? "";
+  const newSku = d.newOrderSku ?? "";
+  const setNewQty = (qty: string) => patch({ newOrderQty: qty });
+  const setNewSku = (sku: string) => patch({ newOrderSku: sku });
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [newOrderError, setNewOrderError] = useState("");
+  const newProduct = data.products.find(
+    (product) => product.sku === newSku && product.active,
+  );
   const value = (key: string, fallback: any = "") => d[key] ?? fallback;
+  const validQty = (max = Infinity) => String(value("qty")).trim() !== "" && Number.isInteger(Number(value("qty"))) && Number(value("qty")) > 0 && Number(value("qty")) <= max;
+  const quantityHint = () => String(value("qty")).trim() === ""
+    ? t("Not entered", "Belum diisi")
+    : t("Enter a valid quantity", "Isi jumlah yang valid");
   const select = (label, key, options, fallback) => (
     <Field label={label}>
-      <select
-        value={value(key, fallback ?? options[0]?.[0] ?? "")}
-        onChange={(e) => patch({ [key]: e.target.value })}
-      >
-        {options.map(([v, label]) => (
-          <option key={v} value={v}>
-            {label}
-          </option>
-        ))}
-      </select>
+      <Lookup
+        value={options.some(([option]) => option === d[key]) ? d[key] : fallback ?? options[0]?.[0] ?? ""}
+        options={options.map(([value, label]) => ({ value, label }))}
+        onValueChange={(next) =>
+          patch({
+            ...(["document", "task", "order"].includes(key)
+              ? { qty: undefined, scan: "", locationScan: "", packed: false, reason: "", reasonError: false }
+              : key === "destination" || key === "location"
+                ? { locationScan: "", qty: undefined, scan: "" }
+                : {}),
+            [key]: next,
+          })
+        }
+      />
     </Field>
   );
   const field = (
@@ -63,7 +95,7 @@ export function Operations(props) {
     field(
       t("Actual quantity (units, required)", "Jumlah aktual (unit, wajib)"),
       "qty",
-      String(fallback),
+      "",
       { type: "number", min: 1, max, step: 1, required: true },
     );
   const scanField = (sku) =>
@@ -91,7 +123,7 @@ export function Operations(props) {
       ),
       "reason",
       "",
-      { required },
+      { required, name: "reason", error: required && d.reasonError && !String(value("reason")).trim() ? t("Reason is required.", "Alasan wajib diisi.") : undefined },
     );
   const form = (children, onSubmit, button, disabled = false) => (
     <form
@@ -121,7 +153,14 @@ export function Operations(props) {
       </div>
     </form>
   );
-  const review = (type, payload, details) => ask(type, payload, details);
+  const review = (type, payload, details) => {
+    if (type === "adjust-count" && !String(payload.reason || "").trim()) {
+      patch({ reasonError: true });
+      (document.querySelector('input[name="reason"]') as HTMLInputElement)?.focus();
+      return;
+    }
+    ask(type, payload, details);
+  };
   const quantityDetails = (q) => [
     t("Actual", "Aktual"),
     `${q} ${t("units", "unit")}`,
@@ -131,41 +170,34 @@ export function Operations(props) {
     `${data.products.find((p) => p.sku === sku)?.name} · ${sku}`,
   ];
   const scoped = (rows) => rows.filter((r) => r.warehouse === warehouse);
-  const queue = (items, selected, onSelect, title = undefined) => (
-    <aside className="task-queue panel">
-      <h2>{title || t("Work queue", "Antrean kerja")}</h2>
-      <div className="queue-selector">
-        <Field label={t("Selected task", "Tugas terpilih")}>
-          <select value={selected} onChange={(e) => onSelect(e.target.value)}>
-            {items.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.id} · {item.sku}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      <div className="queue-items">
-        {items.map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            className={`queue-item ${selected === item.id ? "selected" : ""}`}
-            aria-pressed={selected === item.id}
-            onClick={() => onSelect(item.id)}
-          >
-            <strong>{item.id}</strong>
-            <span>{item.sku}</span>
-            <small>
-              {item.remaining != null
-                ? `${t("Remaining", "Sisa")}: ${item.remaining} ${t("units", "unit")}`
-                : item.status}
-            </small>
-          </button>
-        ))}
-      </div>
-    </aside>
+  const queue = (items, selected, onSelect, title = undefined, detail = undefined) => (
+    <WorkQueue
+      key={`${route}:${warehouse}`}
+      kind={route}
+      items={items}
+      products={data.products}
+      data={data}
+      setCatalogueQuery={props.setCatalogueQuery}
+      focusDocument={d[documentField] || ""}
+      lookupSku={d.newOrderSku || d.sku || ""}
+      selected={selected}
+      onSelect={onSelect}
+      detail={detail}
+      title={
+        title ||
+        {
+          quality: t("Inspection tasks", "Tugas pemeriksaan"),
+          putaway: t("Putaway tasks", "Tugas penempatan"),
+          orders: t("Orders", "Order"),
+          reservations: t("Orders for reservation", "Order untuk reservasi"),
+          picking: t("Picking orders", "Order pengambilan"),
+          shipping: t("Shipment orders", "Order pengiriman"),
+        }[route] ||
+        t("Work queue", "Antrean kerja")
+      }
+    />
   );
+  const emptyQueue = (items, field, detail) => <div className="workflow-grid">{queue(items, d[field], (id) => patch({ [field]: id, qty: undefined, good: undefined, bad: undefined, scan: "", locationScan: "", packed: false }), undefined, detail)}</div>;
   const history = (
     <Panel title={t("Recorded actions", "Tindakan tercatat")}>
       <DataTable
@@ -201,8 +233,8 @@ export function Operations(props) {
       />
     </Panel>
   );
-  const next = (route, en, id) => (
-    <a className="next-link" href={`#${route}`}>
+  const next = (route, en, id, orderId?) => (
+    <a className="next-link" href={`#${route}`} onClick={orderId ? (event) => { event.preventDefault(); go(route, orderId); } : undefined}>
       {t(en, id)}
       <ArrowRight size={17} aria-hidden="true" />
     </a>
@@ -213,9 +245,10 @@ export function Operations(props) {
       ...r,
       remaining: r.ordered - r.received,
     }));
-    const doc = docs.find((r) => r.id === d.document) || docs[0];
-    const q = Number(value("qty", Math.min(60, doc?.remaining || 0)));
-    content = !doc ? (
+    const doc = selectDraftDocument(docs, d.document);
+    activeDocumentId = doc?.id;
+    const q = Number(value("qty"));
+    content = !doc ? emptyQueue(docs, "document", (
       <Panel>
         <Empty
           title={t(
@@ -229,19 +262,20 @@ export function Operations(props) {
           )}
         />
       </Panel>
-    ) : (
+    )) : (
       <div className="workflow-grid">
         {queue(
           docs,
           doc.id,
           (id) => patch({ document: id, qty: undefined, scan: "" }),
           t("Purchase orders", "Pesanan pembelian"),
-        )}
         <Panel
           title={doc.id}
           action={
             <Tag>
-              {doc.received
+              {doc.remaining === 0
+                ? t("Received", "Diterima")
+                : doc.received
                 ? t("Partially received", "Diterima sebagian")
                 : t("Draft", "Draf")}
             </Tag>
@@ -266,8 +300,8 @@ export function Operations(props) {
               <>
                 <Notice>
                   {t(
-                    "QC is required in this demo. Received items stay on hold until inspected.",
-                    "QC diwajibkan pada demo ini. Barang masuk ditahan sampai diperiksa.",
+                    "QC is required. Received items stay on hold until inspected.",
+                    "QC diwajibkan. Barang masuk ditahan sampai diperiksa.",
                   )}
                 </Notice>
                 <h3>{t("Record actual receipt", "Catat penerimaan aktual")}</h3>
@@ -280,14 +314,14 @@ export function Operations(props) {
                     [t("Destination", "Tujuan"), "Receiving"],
                     [
                       t("Draft actual", "Aktual draf"),
-                      `${q} ${t("units", "unit")}`,
+                      validQty(doc.remaining) ? `${q} ${t("units", "unit")}` : quantityHint(),
                     ],
                     [
                       t(
                         "Remaining after confirmation",
                         "Sisa setelah konfirmasi",
                       ),
-                      `${Math.max(0, doc.remaining - q)} ${t("units", "unit")}`,
+                      validQty(doc.remaining) ? `${doc.remaining - q} ${t("units", "unit")}` : "—",
                     ],
                     [
                       t("ERP status", "Status ERP"),
@@ -332,17 +366,17 @@ export function Operations(props) {
             "Continue to quality inspection",
             "Lanjut ke pemeriksaan kualitas",
           )}
-        </Panel>
+        </Panel>,
+        )}
       </div>
     );
   } else if (route === "quality") {
     const tasks = scoped(data.inspections).filter((t) => t.remaining > 0);
-    const task = tasks.find((t) => t.id === d.task) || tasks[0];
-    const good = Number(value("good", Math.min(50, task?.remaining || 0)));
-    const bad = Number(
-      value("bad", Math.max(0, (task?.remaining || 0) - good)),
-    );
-    content = !task ? (
+    const task = selectDraftDocument(tasks, d.task);
+    activeDocumentId = task?.id;
+    const good = Number(value("good"));
+    const bad = Number(value("bad"));
+    content = !task ? emptyQueue(tasks, "task", (
       <Panel>
         <Empty
           title={t(
@@ -353,11 +387,11 @@ export function Operations(props) {
         />
         {next("putaway", "View putaway tasks", "Lihat tugas penempatan")}
       </Panel>
-    ) : (
+    )) : (
       <div className="workflow-grid">
         {queue(tasks, task.id, (id) =>
           patch({ task: id, good: undefined, bad: undefined }),
-        )}
+          undefined,
         <Panel title={task.id}>
           <Summary
             items={[
@@ -384,7 +418,7 @@ export function Operations(props) {
                 {field(
                   t("Good quantity (units)", "Jumlah bagus (unit)"),
                   "good",
-                  Math.min(50, task.remaining),
+                  "",
                   {
                     type: "number",
                     min: 0,
@@ -395,7 +429,7 @@ export function Operations(props) {
                 {field(
                   t("Not good quantity (units)", "Jumlah tidak bagus (unit)"),
                   "bad",
-                  Math.max(0, task.remaining - good),
+                  "",
                   {
                     type: "number",
                     min: 0,
@@ -429,15 +463,17 @@ export function Operations(props) {
             user.role === "operator",
           )}
           {next("putaway", "Continue to putaway", "Lanjut ke penempatan")}
-        </Panel>
+        </Panel>,
+        )}
       </div>
     );
   } else if (route === "putaway") {
     const tasks = scoped(data.putaways).filter((t) => t.remaining > 0);
-    const task = tasks.find((t) => t.id === d.task) || tasks[0];
-    const destination = value("destination", "A-01");
-    const q = Number(value("qty", task?.remaining || 0));
-    content = !task ? (
+    const task = selectDraftDocument(tasks, d.task);
+    activeDocumentId = task?.id;
+    const destination = value("destination", storageLocations[0] || "");
+    const q = Number(value("qty"));
+    content = !task ? emptyQueue(tasks, "task", (
       <Panel>
         <Empty
           title={t("No putaway tasks ready", "Belum ada tugas penempatan siap")}
@@ -448,9 +484,10 @@ export function Operations(props) {
           )}
         />
       </Panel>
-    ) : (
+    )) : (
       <div className="workflow-grid">
-        {queue(tasks, task.id, (id) => patch({ task: id, qty: undefined }))}
+        {queue(tasks, task.id, (id) => patch({ task: id, qty: undefined }),
+          undefined,
         <Panel title={task.id}>
           <Summary
             items={[
@@ -469,11 +506,8 @@ export function Operations(props) {
                 {select(
                   t("Destination location", "Lokasi tujuan"),
                   "destination",
-                  [
-                    ["A-01", "A-01"],
-                    ["A-02", "A-02"],
-                  ],
-                  "A-01",
+                  storageLocations.map((location) => [location, location]),
+                  storageLocations[0] || "",
                 )}
                 {scanLocation(destination)}
                 {scanField(task.sku)}
@@ -505,31 +539,29 @@ export function Operations(props) {
             t("Review putaway", "Tinjau penempatan"),
           )}
           {next("stock", "View stock position", "Lihat posisi stok")}
-        </Panel>
+        </Panel>,
+        )}
       </div>
     );
   } else if (["reservations", "picking", "shipping"].includes(route)) {
     const orders = scoped(data.orders).filter(
       (o) => o.status === "released" && !o.cancelled,
     );
-    const preferred =
-      route === "reservations"
-        ? orders.find(
-            (o) =>
-              !Object.values(o.allocations as Record<string, number>).some(
-                Boolean,
-              ),
-          )
-        : orders[0];
-    const o = orders.find((o) => o.id === d.order) || preferred || orders[0];
-    const p = data.positions.find(
+    const stageQty = (order) => route === "reservations" ? Math.max(0, order.qty - order.shipped - Object.values(order.allocations as Record<string, number>).reduce((a: number, b: number) => a + b, 0)) : route === "picking" ? Object.entries(order.allocations as Record<string, number>).filter(([loc]) => loc !== "Staging").reduce((sum: number, [, qty]) => sum + qty, 0) : order.allocations.Staging || 0;
+    const canWork = (order) => stageQty(order) > 0 && (route !== "reservations" || data.positions.some((position) => position.sku === order.sku && position.warehouse === warehouse && position.condition === "good" && !position.hold && !position.frozen && available(position) > 0));
+    const preferred = orders.find(canWork);
+    const o = selectDraftDocument(orders, d.order, preferred);
+    activeDocumentId = o?.id;
+    const eligible = data.positions.filter(
       (p) =>
         p.sku === o?.sku &&
         p.warehouse === warehouse &&
-        p.location === "A-01" &&
         p.condition === "good" &&
-        !p.hold,
+        !p.hold && !p.frozen && available(p) > 0,
     );
+    const locations = route === "picking" ? Object.keys(o?.allocations || {}).filter((location) => location !== "Staging" && o?.allocations[location] > 0) : eligible.map((p) => p.location);
+    const location = locations.includes(value("location")) ? value("location") : locations[0] || "";
+    const p = eligible.find((position) => position.location === location);
     const reserved = o
       ? Object.values(o.allocations as Record<string, number>).reduce(
           (a, b) => a + b,
@@ -541,14 +573,12 @@ export function Operations(props) {
       route === "reservations"
         ? remaining - reserved
         : route === "picking"
-          ? o?.allocations["A-01"] || 0
+          ? o?.allocations[location] || 0
           : o?.allocations.Staging || 0;
-    const q = Number(
-      value("qty", route === "picking" ? Math.min(20, max) : max),
-    );
-    const ready =
-      route !== "shipping" || data.partialAllowed || q === remaining;
-    content = !o ? (
+    const q = Number(value("qty"));
+    const ready = route !== "shipping" || data.partialAllowed ||
+      (max >= remaining && (!validQty(max) || q === remaining));
+    content = !o ? emptyQueue(orders.map((order) => ({ ...order, remaining: stageQty(order), status: canWork(order) ? "ready" : "waiting" })), "order", (
       <Panel>
         <Empty
           title={t(
@@ -562,10 +592,10 @@ export function Operations(props) {
           )}
         />
       </Panel>
-    ) : (
+    )) : (
       <div className="workflow-grid">
         {queue(
-          orders.map((o) => ({ ...o, remaining: o.qty - o.shipped })),
+          orders.map((o) => ({ ...o, remaining: stageQty(o), status: canWork(o) ? "ready" : "waiting" })),
           o.id,
           (id) =>
             patch({
@@ -573,9 +603,12 @@ export function Operations(props) {
               qty: undefined,
               scan: "",
               locationScan: "",
+              location: undefined,
               packed: false,
+              reason: "",
+              reasonError: false,
             }),
-        )}
+          undefined,
         <Panel title={o.id} action={<Tag>{t("Released", "Dilepas")}</Tag>}>
           <Summary
             items={[
@@ -639,14 +672,14 @@ export function Operations(props) {
                   <>
                     <Summary
                       items={[
-                        [t("Location", "Lokasi"), "A-01"],
+                        [t("Location", "Lokasi"), location],
                         [
                           t("Available", "Tersedia"),
                           `${p ? available(p) : 0} ${t("units", "unit")}`,
                         ],
                         [
                           t("After reservation", "Setelah reservasi"),
-                          `${Math.max(0, (p ? available(p) : 0) - q)} ${t("units", "unit")}`,
+                          validQty(Math.min(max, p ? available(p) : 0)) ? `${(p ? available(p) : 0) - q} ${t("units", "unit")}` : "—",
                         ],
                       ]}
                     />
@@ -663,7 +696,7 @@ export function Operations(props) {
                   <>
                     <div className="form-grid">
                       {scanField(o.sku)}
-                      {route === "picking" && scanLocation("A-01")}
+                      {route === "picking" && scanLocation(location)}
                     </div>
                     <Notice>
                       {route === "picking"
@@ -678,6 +711,7 @@ export function Operations(props) {
                     </Notice>
                   </>
                 )}
+                {route !== "shipping" && locations.length > 0 && select(t("Source location", "Lokasi sumber"), "location", locations.map((loc) => [loc, loc]), location)}
                 {qtyField(route === "picking" ? Math.min(20, max) : max, max)}
                 {route === "picking" && reasonField(q < max)}
                 {route === "shipping" && (
@@ -696,9 +730,12 @@ export function Operations(props) {
                     </label>
                     {!ready && (
                       <Notice kind="warning">
-                        {t(
-                          "Partial shipment policy is not configured. Pick the remaining units or review the demo policy in Settings.",
-                          "Aturan kirim parsial belum diatur. Ambil sisa unit atau tinjau kebijakan demo di Pengaturan.",
+                        {max < remaining ? t(
+                          `Full shipment requires ${remaining} units; only ${max} are ready in Staging. Complete picking before shipment.`,
+                          `Pengiriman penuh memerlukan ${remaining} unit; baru ${max} siap di Staging. Selesaikan picking sebelum pengiriman.`,
+                        ) : t(
+                          `Partial shipments are not allowed. Enter ${remaining} units to ship the full remaining quantity.`,
+                          `Pengiriman parsial tidak diizinkan. Isi ${remaining} unit untuk mengirim seluruh sisa order.`,
                         )}
                       </Notice>
                     )}
@@ -714,7 +751,7 @@ export function Operations(props) {
                   }[route],
                   {
                     order: o.id,
-                    location: "A-01",
+                    location,
                     scan: value("scan"),
                     locationScan: value("locationScan"),
                     qty: q,
@@ -735,8 +772,8 @@ export function Operations(props) {
                           )
                         : route === "picking"
                           ? t(
-                              "A-01 to Staging; reservation follows",
-                              "A-01 ke Staging; reservasi ikut",
+                              `${location} to Staging; reservation follows`,
+                              `${location} ke Staging; reservasi ikut`,
                             )
                           : t(
                               "Stock departs; related reservation fulfilled",
@@ -746,11 +783,11 @@ export function Operations(props) {
                   ],
                 ),
               t("Review", "Tinjau"),
-              !ready,
+              !ready || !location && route !== "shipping" || q > (route === "reservations" ? (p ? available(p) : 0) : max),
             )
           )}
           <div className="next-actions">
-            {next("orders", "View order", "Lihat order")}
+            {next("orders", "View order", "Lihat order", o.id)}
             {next(
               route === "reservations"
                 ? "picking"
@@ -767,17 +804,17 @@ export function Operations(props) {
                 : route === "picking"
                   ? "Lanjut ke packing"
                   : "Lihat kartu stok",
+              route === "shipping" ? undefined : o.id,
             )}
           </div>
-        </Panel>
+        </Panel>,
+        )}
       </div>
     );
   } else if (route === "orders") {
     const orders = scoped(data.orders);
-    const o =
-      orders.find((o) => o.id === d.order) ||
-      orders.find((o) => o.status === "pending-approval") ||
-      orders[0];
+    const o = selectDraftDocument(orders, d.order, orders.find((order) => order.status === "pending-approval"));
+    activeDocumentId = o?.id;
     content = (
       <>
         <div className="section-actions">
@@ -787,8 +824,9 @@ export function Operations(props) {
           </Button>
         </div>
         <div className="workflow-grid">
-          {queue(orders, o?.id, (id) => patch({ order: id }))}
-          <Panel title={o?.id || t("Order details", "Detail order")}>
+          {queue(orders, o?.id, (id) => patch({ order: id }),
+          undefined,
+        <Panel title={o?.id || t("Order details", "Detail order")}>
             {!o ? (
               <Empty title={t("No orders yet", "Belum ada order")} />
             ) : (
@@ -843,8 +881,8 @@ export function Operations(props) {
                   <div className="stack">
                     <Notice>
                       {t(
-                        "Approval and release are separate demonstration steps. Neither reserves stock.",
-                        "Persetujuan dan pelepasan adalah langkah demo terpisah. Keduanya belum memesan stok.",
+                        "Approval and release are separate steps. Stock is reserved during allocation.",
+                        "Persetujuan dan pelepasan adalah langkah terpisah. Stok dipesan saat alokasi.",
                       )}
                     </Notice>
                     {reasonField(o.status === "pending-approval")}
@@ -855,7 +893,12 @@ export function Operations(props) {
                           disabled={
                             user.role === "operator" || o.creator === user.id
                           }
-                          onClick={() =>
+                          onClick={() => {
+                            if (!String(value("reason")).trim()) {
+                              patch({ reasonError: true });
+                              (document.querySelector('input[required][name="reason"]') as HTMLInputElement)?.focus();
+                              return;
+                            }
                             review(
                               "reject-order",
                               { order: o.id, reason: value("reason") },
@@ -863,8 +906,8 @@ export function Operations(props) {
                                 [t("Order", "Order"), o.id],
                                 [t("Reason", "Alasan"), value("reason")],
                               ],
-                            )
-                          }
+                            );
+                          }}
                         >
                           {t("Return for review", "Kembalikan untuk ditinjau")}
                         </Button>
@@ -919,42 +962,91 @@ export function Operations(props) {
                 )}
               </>
             )}
-          </Panel>
-        </div>
+          </Panel>,
+        )}
+      </div>
         {newOrder && (
           <Modal
             title={t("New order draft", "Draf order baru")}
-            onClose={() => setNewOrder(false)}
+            onClose={() => {
+              if (!creatingOrder) setNewOrder(false);
+            }}
           >
             <form
               className="stack"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
+                if (!newProduct || creatingOrder) return;
+                setCreatingOrder(true);
+                setNewOrderError("");
                 const id = `SO-SIM-${1004 + data.orders.length - 3}`;
-                setData((s) => ({
-                  ...s,
-                  orders: [
-                    ...s.orders,
-                    {
-                      id,
-                      sku: "SKU-A",
-                      qty: Number(newQty),
-                      status: "draft",
-                      creator: user.id,
-                      warehouse,
-                      picked: 0,
-                      shipped: 0,
-                      returned: 0,
-                      allocations: {},
-                      cancelled: false,
-                    },
-                  ],
-                }));
-                patch({ order: id });
-                setNewOrder(false);
+                try {
+                  const saved = await setData((s) => ({
+                    ...s,
+                    orders: [
+                      ...s.orders,
+                      {
+                        id,
+                        sku: newSku,
+                        qty: Number(newQty),
+                        status: "draft",
+                        creator: user.id,
+                        warehouse,
+                        picked: 0,
+                        shipped: 0,
+                        returned: 0,
+                        allocations: {},
+                        cancelled: false,
+                      },
+                    ],
+                  }));
+                  if (saved === false) {
+                    setNewOrderError(
+                      t(
+                        "Order could not be saved. Keep this draft and try again.",
+                        "Order belum tersimpan. Pertahankan draf ini dan coba lagi.",
+                      ),
+                    );
+                    return;
+                  }
+                  patch({ order: id, newOrderSku: "", newOrderQty: "" });
+                  setNewOrder(false);
+                } catch {
+                  setNewOrderError(
+                    t(
+                      "Order could not be saved. Keep this draft and try again.",
+                      "Order belum tersimpan. Pertahankan draf ini dan coba lagi.",
+                    ),
+                  );
+                } finally {
+                  setCreatingOrder(false);
+                }
               }}
             >
-              <Summary items={[[t("Item", "Barang"), "Product A · SKU-A"]]} />
+              <Field label={t("Item (required)", "Barang (wajib)")}>
+                <Lookup
+                  required
+                  disabled={creatingOrder}
+                  value={newSku}
+                  options={productSuggestions(data.products, true)}
+                  onValueChange={setNewSku}
+                  placeholder={t(
+                    "Search item name, SKU or barcode",
+                    "Cari nama barang, SKU, atau barcode",
+                  )}
+                />
+              </Field>
+              {newOrderError && <Notice kind="error">{newOrderError}</Notice>}
+              {newProduct && (
+                <Summary
+                  items={[
+                    ["SKU", newProduct.sku],
+                    [t("Category", "Kategori"), newProduct.category || "–"],
+                    [t("Base unit", "Satuan dasar"), newProduct.unit],
+                    ["Barcode", newProduct.barcode],
+                  ]}
+                />
+              )}
               <Field
                 label={t("Quantity (units)", "Jumlah (unit)")}
                 type="number"
@@ -962,10 +1054,17 @@ export function Operations(props) {
                 step="1"
                 required
                 value={newQty}
+                disabled={creatingOrder}
                 onChange={(e) => setNewQty(e.target.value)}
               />
-              <Button primary type="submit">
-                {t("Create draft", "Buat draf")}
+              <Button
+                primary
+                type="submit"
+                disabled={!newProduct || creatingOrder}
+              >
+                {creatingOrder
+                  ? t("Saving…", "Lagi menyimpan…")
+                  : t("Create draft", "Buat draf")}
               </Button>
             </form>
           </Modal>
@@ -975,11 +1074,12 @@ export function Operations(props) {
   } else if (route === "cancellation") {
     const mode = value("mode", "cancel");
     const orders = scoped(data.orders).filter((o) => !o.cancelled);
-    const o = orders.find((o) => o.id === d.order) || orders[0];
+    const o = selectDraftDocument(orders, d.order);
     const tasks = scoped(data.returnTasks).filter((r) => r.remaining > 0);
-    const task = tasks.find((r) => r.id === d.task) || tasks[0];
+    const task = selectDraftDocument(tasks, d.task);
+    activeDocumentId = mode === "cancel" ? o?.id : task?.id;
     const q = Number(value("qty", task?.remaining || 0));
-    const destination = value("destination", "A-01");
+    const destination = value("destination", storageLocations[0] || "");
     content = (
       <Panel
         title={t(
@@ -1072,11 +1172,8 @@ export function Operations(props) {
                 {select(
                   t("Destination", "Tujuan"),
                   "destination",
-                  [
-                    ["A-01", "A-01"],
-                    ["A-02", "A-02"],
-                  ],
-                  "A-01",
+                  storageLocations.map((location) => [location, location]),
+                  storageLocations[0] || "",
                 )}
                 {scanLocation(destination)}
                 {qtyField(task.remaining, task.remaining)}
@@ -1120,7 +1217,8 @@ export function Operations(props) {
     const docs = data.transfers.filter((tr) =>
       mode === "receive" ? tr.to === warehouse : tr.from === warehouse,
     );
-    const doc = docs.find((tr) => tr.id === d.document) || docs[0];
+    const doc = selectDraftDocument(docs, d.document);
+    activeDocumentId = doc?.id;
     const remaining = doc ? doc.sent - doc.received : 0;
     const q = Number(
       value("qty", mode === "receive" ? Math.min(48, remaining) : 50),
@@ -1135,7 +1233,7 @@ export function Operations(props) {
           ]}
           value={mode}
           onChange={(mode) =>
-            patch({ mode, qty: undefined, scan: "", locationScan: "" })
+            patch({ mode, document: undefined, qty: undefined, scan: "", locationScan: "" })
           }
         />
         {mode === "receive" ? (
@@ -1211,13 +1309,16 @@ export function Operations(props) {
               <Summary
                 items={[
                   [t("From", "Dari"), warehouse],
-                  [t("To", "Ke"), warehouse === MAIN ? SECONDARY : MAIN],
-                  [t("Item / location", "Barang / lokasi"), "SKU-A · A-01"],
+                  [t("To", "Ke"), transferTarget],
+                  [t("Item / location", "Barang / lokasi"), `${operationSku} · ${operationLocation}`],
                 ]}
               />
               <div className="form-grid">
-                {scanField("SKU-A")}
-                {scanLocation("A-01")}
+                {itemField}
+                {select(t("Location", "Lokasi"), "location", operationLocations.map((location) => [location, location]), operationLocation)}
+                {select(t("Destination warehouse", "Gudang tujuan"), "to", transferTargets.map((row) => [row.name, row.name]), transferTarget)}
+                {scanField(operationSku)}
+                {scanLocation(operationLocation)}
                 {qtyField(50)}
               </div>
             </>,
@@ -1225,19 +1326,19 @@ export function Operations(props) {
               review(
                 "transfer-send",
                 {
-                  sku: "SKU-A",
-                  location: "A-01",
+                  sku: operationSku,
+                  location: operationLocation,
                   locationScan: value("locationScan"),
                   scan: value("scan"),
                   qty: q,
-                  to: warehouse === MAIN ? SECONDARY : MAIN,
+                  to: transferTarget,
                 },
                 [
-                  itemDetails("SKU-A"),
+                  itemDetails(operationSku),
                   quantityDetails(q),
                   [
                     t("Destination", "Tujuan"),
-                    warehouse === MAIN ? SECONDARY : MAIN,
+                    transferTarget,
                   ],
                 ],
               ),
@@ -1248,12 +1349,9 @@ export function Operations(props) {
     );
   } else if (route === "returns") {
     const mode = value("mode", "customer");
-    const sku = mode === "customer" ? "SKU-A" : "SKU-B";
-    const source = value(
-      "source",
-      mode === "customer" ? "HIST-SIM-020" : "OPEN-SIM-001",
-    );
-    const q = Number(value("qty", 5));
+    const sku = operationSku;
+    const source = value("source", "");
+    const q = Number(value("qty"));
     content = (
       <Panel title={t("Return details", "Detail retur")}>
         <Tabs
@@ -1270,11 +1368,12 @@ export function Operations(props) {
         {form(
           <>
             <div className="form-grid">
+              {itemField}
               {field(
                 t("Source document (required)", "Dokumen asal (wajib)"),
                 "source",
-                mode === "customer" ? "HIST-SIM-020" : "OPEN-SIM-001",
-                { required: true },
+                "",
+                { required: true, suggestions: (data.returnSources || []).filter((row) => row.sku === sku && row.type === mode).map((row) => ({ value: row.id, label: row.id })) },
               )}
               {scanField(sku)}
               {qtyField(5)}
@@ -1283,8 +1382,8 @@ export function Operations(props) {
             <Notice>
               {mode === "customer"
                 ? t(
-                    "HIST-SIM-020 is a historical demo shipment allowing 5 units. Returned items go to Receiving on QC hold, not directly to available stock.",
-                    "HIST-SIM-020 adalah contoh pengiriman historis dengan batas retur 5 unit. Barang retur masuk Receiving dan ditahan untuk QC.",
+                    "Use a confirmed shipment transaction as the source. Returned items enter Receiving on QC hold.",
+                    "Gunakan transaksi pengiriman terkonfirmasi sebagai sumber. Barang retur masuk Receiving dan ditahan untuk QC.",
                   )
                 : t(
                     "Supplier return uses unreserved, not good stock at QC. A separate confirmed dispatch reduces physical stock.",
@@ -1345,7 +1444,8 @@ export function Operations(props) {
       </Panel>
     );
   } else if (route === "count") {
-    const task = scoped(data.counts).find((c) => c.status !== "closed");
+    const task = selectDraftDocument(scoped(data.counts).filter((count) => count.status !== "closed" || count.id === d.task), d.task);
+    activeDocumentId = task?.id;
     const reviewer =
       user.role !== "operator" && value("view", "count") === "review";
     const q = Number(value("qty", ""));
@@ -1368,30 +1468,35 @@ export function Operations(props) {
               title={t("No active count task", "Belum ada tugas hitung aktif")}
             />
             {user.role !== "operator" && (
+              <div className="stack">
+              {itemField}
+              {select(t("Location", "Lokasi"), "location", (data.locationMaster || []).filter((row) => !row.frozen).map((row) => [row.name, row.name]), operationLocation)}
               <Button
                 primary
                 onClick={() =>
-                  review("freeze", { sku: "SKU-A", location: "A-01" }, [
-                    [t("Scope", "Lingkup"), `${warehouse} · A-01 · SKU-A`],
+                  review("freeze", { sku: operationSku, location: operationLocation }, [
+                    [t("Scope", "Lingkup"), `${warehouse} · ${operationLocation} · ${operationSku}`],
                     [
                       t("Effect", "Dampak"),
                       t(
-                        "Freeze A-01 and create a blind count task",
-                        "Bekukan A-01 dan buat tugas hitung tanpa saldo",
+                        "Freeze the selected location and create a blind count task",
+                        "Bekukan lokasi terpilih dan buat tugas hitung tanpa saldo",
                       ),
                     ],
                   ])
                 }
               >
                 {t(
-                  "Freeze A-01 and start count",
-                  "Bekukan A-01 dan mulai hitung",
+                  "Freeze location and start count",
+                  "Bekukan lokasi dan mulai hitung",
                 )}
               </Button>
+              </div>
             )}
           </>
         ) : (
           <>
+            {select(t("Count task", "Tugas hitung"), "task", scoped(data.counts).map((count) => [count.id, `${count.id} · ${count.sku} · ${count.location}`]), task.id)}
             <Summary
               items={[
                 [t("Count task", "Tugas hitung"), task.id],
@@ -1536,6 +1641,10 @@ export function Operations(props) {
   }
   return (
     <div className="stack">
+      {d[documentField] && !activeDocumentId && !props.catalogueLoading && <Notice kind="warning">
+        {t("The saved document is unavailable in this view. Choose a document explicitly before entering a new scan or quantity.", "Dokumen draf tidak tersedia pada tampilan ini. Pilih dokumen secara eksplisit sebelum memasukkan scan atau jumlah baru.")}
+        <Button onClick={() => applyDraft({ [documentField]: undefined, qty: undefined, good: undefined, bad: undefined, scan: "", locationScan: "", reason: "" })}>{t("Clear unavailable document draft", "Hapus draf dokumen yang tidak tersedia")}</Button>
+      </Notice>}
       {content}
       {!["orders", "count", "returns", "transfers", "cancellation"].includes(
         route,

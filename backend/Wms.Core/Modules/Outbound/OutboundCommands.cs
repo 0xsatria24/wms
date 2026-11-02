@@ -17,7 +17,7 @@ public sealed partial class CommandProcessor
             var q = p.Quantity();
             var destination = p.Text("destination");
             VerifyLocation(destination);
-            Require(destination is "A-01" or "A-02", "scan-location", 400);
+            Require(locations.Any(l => l.WarehouseId == actor.WarehouseId && l.Code == destination && l.Pickable), "scan-location", 400);
             var from = Position(task.ItemId, "Staging");
             var to = Position(task.ItemId, destination);
             var allocation = Alloc(o, from);

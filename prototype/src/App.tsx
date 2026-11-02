@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Cube,
   TrayArrowDown,
@@ -57,6 +57,7 @@ function Application({ locale, setLocale }) {
   const lastEdit = useRef<Promise<boolean>>(Promise.resolve(true));
   const [authMode, setAuthMode] =
     useState<api.Session["mode"]>("development-demo");
+  const [companyName, setCompanyName] = useState("Inventory / WMS");
   const [warehouse, setWarehouse] = useState(MAIN);
   const warehouseRef = useRef(warehouse);
   warehouseRef.current = warehouse;
@@ -85,18 +86,28 @@ function Application({ locale, setLocale }) {
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(false);
-  const go = (next) => {
+  const [catalogueQuery, replaceCatalogueQuery] = useState<any>({ view: "stock", page: 1, pageSize: 10 });
+  const catalogueRef = useRef(catalogueQuery);
+  catalogueRef.current = catalogueQuery;
+  const setCatalogueQuery = useCallback((value) => replaceCatalogueQuery((previous) => JSON.stringify(previous) === JSON.stringify(value) ? previous : value), []);
+  const catalogueLoading = data.catalogue?.requestKey !== JSON.stringify(catalogueQuery);
+  const refreshSequence = useRef(0);
+  const go = (next, orderId?) => {
+    if (orderId) setDrafts((all) => ({ ...all, [`${userRef.current?.id}|${warehouseRef.current}|${next}`]: { ...all[`${userRef.current?.id}|${warehouseRef.current}|${next}`], order: orderId } }));
     location.hash = next;
     setRoute(next);
+    setCatalogueQuery({ view: next, page: 1, pageSize: 25 });
     setMenu(false);
     setNotice(null);
   };
   const refresh = async (target = warehouse, owner = userRef.current?.id) => {
     if (!owner) return;
+    const sequence = ++refreshSequence.current;
     try {
-      const snapshot = await api.snapshot(target);
-      const pending = await api.pending();
-      if (userRef.current?.id === owner && warehouseRef.current === target) {
+      const snapshot = await api.snapshot(target, catalogueRef.current);
+      if (userRef.current?.id === owner && warehouseRef.current === target && sequence === refreshSequence.current) {
+        const pending = await api.pending();
+        if (sequence !== refreshSequence.current) return;
         const next = { ...snapshot, pending };
         dataRef.current = next;
         replaceData(next);
@@ -111,7 +122,13 @@ function Application({ locale, setLocale }) {
         }
       }
     } catch (error) {
-      setStale(true);
+      const pending = await api.pending().catch(() => null);
+      if (pending && userRef.current?.id === owner && warehouseRef.current === target && sequence === refreshSequence.current) {
+        const next = { ...dataRef.current, pending };
+        dataRef.current = next;
+        replaceData(next);
+      }
+      if (sequence === refreshSequence.current) setStale(true);
       throw error;
     }
   };
@@ -164,6 +181,7 @@ function Application({ locale, setLocale }) {
       .session()
       .then(async (session) => {
         setAuthMode(session.mode);
+        setCompanyName(session.companyName || "Inventory / WMS");
         if (session.user?.status === "active") {
           userRef.current = session.user;
           replaceUser(session.user);
@@ -195,7 +213,7 @@ function Application({ locale, setLocale }) {
   }, []);
   useEffect(() => {
     if (userRef.current) {
-      setLoading(true);
+      setLoading(snapshotScope !== `${userRef.current.id}|${warehouse}`);
       refresh()
         .catch((error) => {
           setNotice({ kind: "error", message: errorText(error.message, t) });
@@ -206,15 +224,16 @@ function Application({ locale, setLocale }) {
           }
         })
         .finally(() => setLoading(false));
-      return api.subscribe(warehouse, () => {
-        void refresh().catch(() => {});
-      });
     }
+  }, [user?.id, warehouse, catalogueQuery]);
+  useEffect(() => {
+    if (userRef.current) return api.subscribe(warehouse, () => { void refresh().catch(() => {}); });
   }, [user?.id, warehouse]);
   useEffect(() => {
     const handle = () => {
       const next = location.hash.slice(1);
       setRoute(user || authRoutes.includes(next) ? next : "signin");
+      if (catalogueRef.current.view !== next) setCatalogueQuery({ view: next, page: 1, pageSize: 25 });
       setMenu(false);
     };
     window.addEventListener("hashchange", handle);
@@ -232,9 +251,20 @@ function Application({ locale, setLocale }) {
         setMenu(false);
         (document.querySelector(".mobile-menu") as HTMLElement)?.focus();
       }
+      if (event.key === "Tab" && menu) {
+        const controls = Array.from(document.querySelectorAll<HTMLElement>(".sidebar a, .sidebar summary, .sidebar select"))
+          .filter((element) => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
+  }, [menu]);
+  useEffect(() => {
+    if (menu) (document.querySelector(".sidebar details[open] summary, .sidebar a") as HTMLElement)?.focus();
   }, [menu]);
   const screen = screens.find((s) => s[0] === route);
   useEffect(() => {
@@ -259,9 +289,11 @@ function Application({ locale, setLocale }) {
       ...all,
       [draftKey]: { ...all[draftKey], ...patch },
     }));
-  const ask = (type, payload, details) => {
+  const ask = async (type, payload, details) => {
+    if (catalogueLoading) { setNotice({ kind: "warning", message: t("Wait for the current search to finish before reviewing this transaction.", "Tunggu pencarian saat ini selesai sebelum meninjau transaksi.") }); return; }
     const source = payload.document || payload.order || payload.task;
-    const pending = data.pending.find(
+    const currentPending = await api.pending().catch(() => data.pending);
+    const pending = currentPending.find(
       (p) =>
         p.request.user === user.id &&
         p.request.warehouse === warehouse &&
@@ -309,8 +341,8 @@ function Application({ locale, setLocale }) {
           user.id,
           mode,
         );
-        await refresh();
         const { message, id } = posted;
+        await refresh().catch(() => {});
         if (message === "offline")
           flash(
             t(
@@ -368,7 +400,7 @@ function Application({ locale, setLocale }) {
     try {
       const row = (await api.pending()).find((p) => p.id === id);
       const posted = await api.retryOriginal(row, user, warehouse);
-      await refresh();
+      await refresh().catch(() => {});
       if (posted.message === "unknown" || posted.message === "offline") {
         flash(
           t(
@@ -390,6 +422,11 @@ function Application({ locale, setLocale }) {
     }
   };
   const ctx = {
+    catalogueQuery,
+    authMode,
+    companyName,
+    setCatalogueQuery,
+    catalogueLoading,
     data,
     setData,
     user,
@@ -423,8 +460,8 @@ function Application({ locale, setLocale }) {
         ),
       });
     },
-    deleteItem: async (sku: string, version: number, reason: string) => {
-      await api.deleteItem(warehouse, sku, version, reason);
+    deleteItem: async (sku: string, version: number) => {
+      await api.deleteItem(warehouse, sku, version);
       await refresh();
       setNotice({
         kind: "success",
@@ -538,7 +575,7 @@ function Application({ locale, setLocale }) {
               {t("Menu", "Menu")}
             </Button>
             <button className="scope-button" onClick={() => go("workspace")}>
-              {t("Demo Company", "Perusahaan Demo")}
+              {companyName}
               <CaretDown size={13} />
             </button>
             <span className="scope-separator" />
@@ -546,10 +583,10 @@ function Application({ locale, setLocale }) {
               {warehouse}
               <CaretDown size={13} />
             </button>
-            <span className="simulation">
+            {authMode === "development-demo" && <span className="simulation">
               <ShieldCheck size={17} aria-hidden="true" />
               {t("Simulation data", "Data simulasi")}
-            </span>
+            </span>}
             <div className="topbar-account">
               <span>
                 {user.name}
@@ -627,6 +664,8 @@ function Application({ locale, setLocale }) {
                     <p>{t(screen[4], screen[5])}</p>
                   </div>
                 </div>
+                {data.erpDelivery?.maintenance && <Notice kind="warning">{t("Recovery reconciliation is in progress. Write operations are paused.", "Rekonsiliasi pemulihan sedang berlangsung. Penulisan ditahan.")}</Notice>}
+                {catalogueLoading && !loading && <Notice>{t("Loading current results…", "Memuat hasil saat ini…")}</Notice>}
                 {loading || snapshotScope !== `${user.id}|${warehouse}` ? (
                   <Notice
                     title={
@@ -664,12 +703,17 @@ function Application({ locale, setLocale }) {
                 )}
               </>
             )}
+            {["transfers", "transfer", "returns", "cancellation", "count"].includes(route) && data.catalogue?.pages > 1 && <div className="form-actions" aria-label={t("Document pages", "Halaman dokumen")}>
+              <Button disabled={catalogueLoading || data.catalogue.page <= 1} onClick={() => setCatalogueQuery({ ...catalogueQuery, page: data.catalogue.page - 1 })}>{t("Previous page", "Halaman sebelumnya")}</Button>
+              <span>{t(`Page ${data.catalogue.page} of ${data.catalogue.pages} · ${data.catalogue.total} documents`, `Halaman ${data.catalogue.page} dari ${data.catalogue.pages} · ${data.catalogue.total} dokumen`)}</span>
+              <Button disabled={catalogueLoading || data.catalogue.page >= data.catalogue.pages} onClick={() => setCatalogueQuery({ ...catalogueQuery, page: data.catalogue.page + 1 })}>{t("Next page", "Halaman berikutnya")}</Button>
+            </div>}
             <footer className="workspace-footer">
               <span>
-                {t(
+                {authMode === "development-demo" ? t(
                   "Development database · Drafts stay in this tab",
                   "Database pengembangan · Draf tetap di tab ini",
-                )}
+                ) : t("Drafts stay in this tab", "Draf tetap di tab ini")}
               </span>
               {data.asOf && snapshotScope === `${user.id}|${warehouse}` && (
                 <span>
@@ -772,7 +816,7 @@ function Application({ locale, setLocale }) {
                 items={[
                   [
                     t("Company", "Perusahaan"),
-                    t("Demo Company", "Perusahaan Demo"),
+                    companyName,
                   ],
                   [t("Warehouse", "Gudang"), warehouse],
                   ...review.details,
@@ -780,8 +824,8 @@ function Application({ locale, setLocale }) {
               />
               <Notice>
                 {t(
-                  "The .NET API validates and records this confirmation in the development database.",
-                  "API .NET memvalidasi dan mencatat konfirmasi ini di database pengembangan.",
+                  "Confirm the item, quantity and destination before recording this transaction.",
+                  "Periksa barang, jumlah, dan tujuan sebelum mencatat transaksi ini.",
                 )}
               </Notice>
             </>

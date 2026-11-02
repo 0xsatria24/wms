@@ -27,7 +27,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         var serverVersion = int.Parse((string)(await version.ExecuteScalarAsync())!);
         Assert.InRange(serverVersion, 180000, 189999);
     }
-    public async Task<DbContextOptions<WmsDb>> Database()
+    public async Task<DbContextOptions<WmsDb>> Database(bool seedDemo = true)
     {
         var name = $"wms_test_{Guid.NewGuid():N}";
         createdDatabases.Add(name);
@@ -39,7 +39,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         var options = new DbContextOptionsBuilder<WmsDb>().UseNpgsql(new NpgsqlConnectionStringBuilder(AdminConnection) { Database = name }.ConnectionString).Options;
         await using var db = new WmsDb(options);
         await db.Database.MigrateAsync();
-        await Seed.Demo(db);
+        if (seedDemo) await Seed.Demo(db);
         return options;
     }
     public async Task DisposeAsync()

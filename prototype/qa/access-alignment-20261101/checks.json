@@ -1,0 +1,141 @@
+{
+  "headers": [
+    {
+      "align": "left",
+      "label": "Name"
+    },
+    {
+      "align": "left",
+      "label": "Work email"
+    },
+    {
+      "align": "center",
+      "label": "Role"
+    },
+    {
+      "align": "center",
+      "label": "Warehouse access"
+    },
+    {
+      "align": "center",
+      "label": "Status"
+    },
+    {
+      "align": "center",
+      "label": "Actions"
+    }
+  ],
+  "overflow": false,
+  "rows": [
+    [
+      {
+        "align": "start",
+        "text": "Demo admin"
+      },
+      {
+        "align": "start",
+        "text": "admin@demo.company"
+      },
+      {
+        "align": "center",
+        "text": "admin"
+      },
+      {
+        "align": "center",
+        "text": "Main Warehouse, Secondary Warehouse"
+      },
+      {
+        "align": "center",
+        "text": "Active"
+      },
+      {
+        "align": "center",
+        "text": "Review accessDelete user"
+      }
+    ],
+    [
+      {
+        "align": "start",
+        "text": "Demo operator"
+      },
+      {
+        "align": "start",
+        "text": "operator@demo.company"
+      },
+      {
+        "align": "center",
+        "text": "operator"
+      },
+      {
+        "align": "center",
+        "text": "Main Warehouse"
+      },
+      {
+        "align": "center",
+        "text": "Active"
+      },
+      {
+        "align": "center",
+        "text": "Review accessDelete user"
+      }
+    ],
+    [
+      {
+        "align": "start",
+        "text": "Demo supervisor"
+      },
+      {
+        "align": "start",
+        "text": "supervisor@demo.company"
+      },
+      {
+        "align": "center",
+        "text": "supervisor"
+      },
+      {
+        "align": "center",
+        "text": "Main Warehouse"
+      },
+      {
+        "align": "center",
+        "text": "Active"
+      },
+      {
+        "align": "center",
+        "text": "Review accessDelete user"
+      }
+    ]
+  ],
+  "tags": [
+    {
+      "lines": 1,
+      "overflowWrap": "normal",
+      "text": "admin"
+    },
+    {
+      "lines": 1,
+      "overflowWrap": "normal",
+      "text": "Active"
+    },
+    {
+      "lines": 1,
+      "overflowWrap": "normal",
+      "text": "operator"
+    },
+    {
+      "lines": 1,
+      "overflowWrap": "normal",
+      "text": "Active"
+    },
+    {
+      "lines": 1,
+      "overflowWrap": "normal",
+      "text": "supervisor"
+    },
+    {
+      "lines": 1,
+      "overflowWrap": "normal",
+      "text": "Active"
+    }
+  ]
+}

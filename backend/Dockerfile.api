@@ -7,5 +7,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/publish ./
 ENV ASPNETCORE_HTTP_PORTS=8080
+RUN mkdir -p /var/wms/keys && chown $APP_UID /var/wms/keys && chmod 700 /var/wms/keys
 USER $APP_UID
 ENTRYPOINT ["dotnet","Wms.Api.dll"]

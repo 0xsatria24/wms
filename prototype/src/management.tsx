@@ -8,11 +8,14 @@ import {
   PencilSimple,
 } from "@phosphor-icons/react";
 import { itemCatalogPage } from "./item-catalog";
+import { useServerCatalogue } from "./server-catalogue";
+import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { MAIN, SECONDARY, locations } from "./fixtures";
 import {
   useText,
   Button,
   Field,
+  Lookup,
   Notice,
   Panel,
   Tag,
@@ -117,6 +120,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
   return (
     <Panel
       title={t("Access management", "Pengelolaan akses")}
+      className="access-management"
       action={
         <Button primary onClick={() => startUserAction()}>
           <Plus size={18} aria-hidden="true" />
@@ -415,7 +419,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
   );
 }
 
-export function Master({ data, setData, user, flash, deleteItem }) {
+export function Master({ data, setData, user, flash, deleteItem, setCatalogueQuery }) {
   const t = useText();
   const [tab, setTab] = useState("items");
   const [sku, setSku] = useState("SKU-A");
@@ -426,7 +430,6 @@ export function Master({ data, setData, user, flash, deleteItem }) {
   const [name, setName] = useState("");
   const [factor, setFactor] = useState("1");
   const [deleting, setDeleting] = useState(null);
-  const [deleteReason, setDeleteReason] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -439,26 +442,28 @@ export function Master({ data, setData, user, flash, deleteItem }) {
   const [sort, setSort] = useState("name");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const catalogue = useMemo(
+  const server = useServerCatalogue(data, tab === "items" ? setCatalogueQuery : undefined, { view: "master", query: deferredQuery, status, category, sort, page, pageSize, focusSku: sku });
+  const localCatalogue = useMemo(
     () =>
-      itemCatalogPage(data.products, {
+      itemCatalogPage(server ? data.products.filter((product) => server.ids.includes(product.sku)) : data.products, {
         query: deferredQuery,
         status,
         category,
         sort,
-        page,
+        page: setCatalogueQuery ? 1 : page,
         pageSize,
       }),
-    [data.products, deferredQuery, status, category, sort, page, pageSize],
+    [data.products, deferredQuery, status, category, sort, page, pageSize, server],
   );
+  const catalogue = server ? { ...localCatalogue, ...server, rows: localCatalogue.rows } : localCatalogue;
   const categories = useMemo(
     () =>
       [
         ...new Set<string>(
-          data.products.map((p) => p.category).filter(Boolean),
+          (server?.categories || data.products.map((p) => p.category)).filter(Boolean),
         ),
       ].sort(),
-    [data.products],
+    [data.products, server],
   );
   const closeEditor = () => {
     if (saving || deleteBusy) return;
@@ -608,12 +613,22 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                 label={t("Search items", "Cari barang")}
                 type="search"
                 value={query}
+                suggestions={productSuggestions(
+                  data.products.filter(
+                    (product) =>
+                      (!status ||
+                        (status === "active"
+                          ? product.active
+                          : !product.active)) &&
+                      (!category || product.category === category),
+                  ),
+                )}
                 placeholder={t(
                   "Search name, SKU or barcode…",
                   "Cari nama, SKU, atau barcode…",
                 )}
-                onChange={(event) => {
-                  setQuery(event.target.value);
+                onValueChange={(value) => {
+                  setQuery(value);
                   setPage(1);
                 }}
               />
@@ -632,20 +647,17 @@ export function Master({ data, setData, user, flash, deleteItem }) {
               </select>
             </Field>
             <Field label={t("Category", "Kategori")}>
-              <select
+              <Lookup
                 value={category}
-                onChange={(event) => {
-                  setCategory(event.target.value);
+                options={[
+                  { value: "", label: t("All categories", "Semua kategori") },
+                  ...valueSuggestions(categories),
+                ]}
+                onValueChange={(value) => {
+                  setCategory(value);
                   setPage(1);
                 }}
-              >
-                <option value="">
-                  {t("All categories", "Semua kategori")}
-                </option>
-                {categories.map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
+              />
             </Field>
             <Field label={t("Sort by", "Urutkan")}>
               <select
@@ -664,8 +676,8 @@ export function Master({ data, setData, user, flash, deleteItem }) {
           <div className="catalogue-results" role="status">
             <span>
               {t(
-                `${catalogue.total} of ${data.products.length} items`,
-                `${catalogue.total} dari ${data.products.length} barang`,
+                `${catalogue.total} of ${server?.scopeTotal ?? data.products.length} items`,
+                `${catalogue.total} dari ${server?.scopeTotal ?? data.products.length} barang`,
               )}
             </span>
             {(query || status || category) && (
@@ -725,21 +737,39 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                   key: "actions",
                   label: t("Actions", "Tindakan"),
                   render: (p) => (
-                    <Button
-                      aria-label={t(
-                        `${canEdit ? "Edit" : "View"} ${p.name} (${p.sku})`,
-                        `${canEdit ? "Ubah" : "Lihat"} ${p.name} (${p.sku})`,
+                    <div className="item-actions">
+                      <Button
+                        aria-label={t(
+                          `${canEdit ? "Edit" : "View"} ${p.name} (${p.sku})`,
+                          `${canEdit ? "Ubah" : "Lihat"} ${p.name} (${p.sku})`,
+                        )}
+                        onClick={() => {
+                          setSku(p.sku);
+                          const { id, ...item } = p;
+                          setForm(item);
+                          setEditorOpen(true);
+                        }}
+                      >
+                        <PencilSimple size={18} aria-hidden="true" />
+                        {canEdit ? t("Edit", "Ubah") : t("View", "Lihat")}
+                      </Button>
+                      {canEdit && (
+                        <Button
+                          danger
+                          aria-label={t(
+                            `Delete ${p.name} (${p.sku})`,
+                            `Hapus ${p.name} (${p.sku})`,
+                          )}
+                          onClick={() => {
+                            setDeleting({ ...p });
+                            setDeleteError("");
+                          }}
+                        >
+                          <Trash size={18} aria-hidden="true" />
+                          {t("Delete", "Hapus")}
+                        </Button>
                       )}
-                      onClick={() => {
-                        setSku(p.sku);
-                        const { id, ...item } = p;
-                        setForm(item);
-                        setEditorOpen(true);
-                      }}
-                    >
-                      <PencilSimple size={18} aria-hidden="true" />
-                      {canEdit ? t("Edit", "Ubah") : t("View", "Lihat")}
-                    </Button>
+                    </div>
                   ),
                 },
               ]}
@@ -827,13 +857,24 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                     <Field
                       label={t("Category", "Kategori")}
                       value={form.category}
-                      onChange={change("category")}
+                      suggestions={valueSuggestions(
+                        data.products.map((product) => product.category),
+                      )}
+                      onValueChange={(category) =>
+                        setForm((current) => ({ ...current, category }))
+                      }
                     />
                     <Field
                       label={t("Base unit", "Satuan dasar")}
                       value={form.unit}
                       readOnly={!!selected}
-                      onChange={change("unit")}
+                      suggestions={valueSuggestions([
+                        ...data.products.map((product) => product.unit),
+                        ...(data.unitMaster || []).map((unit) => unit.name),
+                      ])}
+                      onValueChange={(unit) =>
+                        setForm((current) => ({ ...current, unit }))
+                      }
                     />
                     <Field
                       label={t("Conversion factor", "Faktor konversi")}
@@ -931,7 +972,6 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                         disabled={saving}
                         onClick={() => {
                           setDeleting({ ...selected });
-                          setDeleteReason("");
                           setDeleteError("");
                         }}
                       >
@@ -986,6 +1026,7 @@ export function Master({ data, setData, user, flash, deleteItem }) {
               },
               {
                 key: "factor",
+                numeric: tab !== "locations",
                 label:
                   tab === "locations"
                     ? t("Status", "Status")
@@ -1046,14 +1087,13 @@ export function Master({ data, setData, user, flash, deleteItem }) {
             className="stack"
             onSubmit={async (event) => {
               event.preventDefault();
-              if (deleteBusy || !deleteReason.trim()) return;
+              if (deleteBusy) return;
               setDeleteBusy(true);
               setDeleteError("");
               try {
                 await deleteItem(
                   deleting.sku,
                   deleting.version,
-                  deleteReason.trim(),
                 );
                 const next = data.products.find(
                   (product) => product.sku !== deleting.sku,
@@ -1081,29 +1121,19 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                 "Penghapusan tidak bisa dibatalkan. Hanya barang yang belum dipakai yang bisa dihapus. Server memeriksa seluruh gudang, dokumen, kemasan, dan riwayat label serta menyimpan catatan audit.",
               )}
             </Notice>
-            <Field
-              label={t(
-                "Deletion reason (required)",
-                "Alasan penghapusan (wajib)",
-              )}
-              value={deleteReason}
-              required
-              disabled={deleteBusy}
-              onChange={(event) => setDeleteReason(event.target.value)}
-            />
             {deleteError && <Notice kind="error">{deleteError}</Notice>}
             <div className="form-actions">
               <Button disabled={deleteBusy} onClick={() => setDeleting(null)}>
-                {t("Cancel", "Batal")}
+                {t("No", "Tidak")}
               </Button>
               <Button
                 danger
                 type="submit"
-                disabled={deleteBusy || !deleteReason.trim()}
+                disabled={deleteBusy}
               >
                 {deleteBusy
                   ? t("Deleting…", "Lagi menghapus…")
-                  : t("Delete item", "Hapus barang")}
+                  : t("Yes", "Ya")}
               </Button>
             </div>
           </form>
@@ -1112,31 +1142,35 @@ export function Master({ data, setData, user, flash, deleteItem }) {
       {adding && (
         <Modal
           title={t("Add master definition", "Tambah definisi master")}
-          onClose={() => setAdding(false)}
+          onClose={() => { if (!saving) setAdding(false); }}
         >
           <form
             className="stack"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (definitions.some((r) => r.name === name)) {
+              if (saving) return;
+              if (definitions.some((r) => r.name.toLowerCase() === name.trim().toLowerCase())) {
                 flash(
                   t("This code already exists.", "Kode ini sudah ada."),
                   "error",
                 );
                 return;
               }
-              setData({
+              setSaving(true);
+              const saved = await setData({
                 ...data,
                 [tab === "locations" ? "locationMaster" : "unitMaster"]: [
                   ...definitions,
-                  { name, factor: Number(factor) },
+                  { name: name.trim(), factor: Number(factor), ...(tab === "locations" ? { pickable: true } : {}) },
                 ],
               });
+              setSaving(false);
+              if (!saved) return;
               setAdding(false);
               flash(
                 t(
-                  "Master definition saved locally.",
-                  "Definisi master tersimpan lokal.",
+                  "Master definition saved.",
+                  "Definisi master tersimpan.",
                 ),
               );
             }}
@@ -1165,8 +1199,8 @@ export function Master({ data, setData, user, flash, deleteItem }) {
                 onChange={(e) => setFactor(e.target.value)}
               />
             )}
-            <Button type="submit" primary>
-              {t("Save definition", "Simpan definisi")}
+            <Button type="submit" primary disabled={saving}>
+              {saving ? t("Saving…", "Menyimpan…") : t("Save definition", "Simpan definisi")}
             </Button>
           </form>
         </Modal>

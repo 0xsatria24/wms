@@ -1,0 +1,13 @@
+[Unit]
+Description=Inventory WMS database backup
+Requires=docker.service
+After=docker.service network-online.target
+RequiresMountsFor=/mnt/wms-backups
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/inventory-wms
+ExecStart=/usr/bin/bash /opt/inventory-wms/scripts/backup-production.sh /mnt/wms-backups
+UMask=0077
+StandardOutput=journal
+StandardError=journal

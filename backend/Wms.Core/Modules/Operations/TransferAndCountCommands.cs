@@ -1,4 +1,5 @@
 using Wms.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Wms.Shared;
 using static Wms.Shared.Rules;
 
@@ -6,7 +7,7 @@ namespace Wms.Modules.Inventory;
 
 public sealed partial class CommandProcessor
 {
-    private void TransferOrReturn()
+    private async Task TransferOrReturn(CancellationToken ct)
     {
         var p = command.Payload;
         var q = p.Quantity();
@@ -18,8 +19,8 @@ public sealed partial class CommandProcessor
                     Scan(item.Id);
                     VerifyLocation(p.Text("location"));
                     var to = p.Text("to");
-                    var targetId = to == "Main Warehouse" ? "main" : to == "Secondary Warehouse" ? "secondary" : "";
-                    Require(targetId != "" && targetId != actor.WarehouseId, "scope", 400);
+                    var targetId = await db.Warehouses.Where(w => w.CompanyId == "demo" && w.Id != "transit" && (w.Id == to || w.Name == to)).Select(w => w.Id).SingleOrDefaultAsync(ct);
+                    Require(targetId is not null && targetId != actor.WarehouseId, "scope", 400);
                     var source = Position(item.Id, p.Text("location"));
                     Require(q <= Available(source), "shortage");
                     var doc = AddDoc("transfer", item.Id, q, transactionId);
@@ -54,7 +55,7 @@ public sealed partial class CommandProcessor
                     Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
                     var source = p.Text("source");
                     var prior = db.Documents.Where(d => d.Kind == "customer-return" && d.WarehouseId == actor.WarehouseId && d.ItemId == item.Id && d.Source == source).Sum(d => d.Quantity);
-                    var limit = source == "HIST-SIM-020" && item.Sku == "SKU-A" && actor.WarehouseId == "main" ? 5m : db.Entries.Join(db.Movements, e => e.MovementId, m => m.Id, (e, m) => new { e, m }).Where(x => x.m.Id == source && x.m.Kind == "ship" && x.m.WarehouseId == actor.WarehouseId && x.e.QuantityDelta < 0 && db.Positions.Any(position => position.Id == x.e.PositionId && position.ItemId == item.Id)).Sum(x => -x.e.QuantityDelta);
+                    var limit = await db.Entries.Join(db.Movements, e => e.MovementId, m => m.Id, (e, m) => new { e, m }).Where(x => x.m.Id == source && x.m.Kind == "ship" && x.m.WarehouseId == actor.WarehouseId && x.e.QuantityDelta < 0 && db.Positions.Any(position => position.Id == x.e.PositionId && position.ItemId == item.Id)).SumAsync(x => -x.e.QuantityDelta, ct);
                     Require(q <= limit - prior, "source");
                     Change(Position(item.Id, "Receiving", "unassessed", "awaiting-qc"), q, source);
                     AddDoc("customer-return", item.Id, q, source).Actual = q;
@@ -66,8 +67,12 @@ public sealed partial class CommandProcessor
                     Supervisor(actor);
                     var item = Item(p.Text("sku"));
                     Scan(item.Id);
-                    Require(p.Text("source") == "OPEN-SIM-001" && !string.IsNullOrWhiteSpace(p.Text("reason")), "source", 400);
+                    Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
                     var source = Position(item.Id, "QC", "not-good", "quality-rejected");
+                    var reference = p.Text("source");
+                    var limit = await db.Entries.Join(db.Movements, e => e.MovementId, m => m.Id, (e, m) => new { e, m }).Where(x => x.m.Id == reference && (x.m.Kind == "qc" || x.m.Kind == "opening") && x.m.WarehouseId == actor.WarehouseId && x.e.PositionId == source.Id && x.e.QuantityDelta > 0).SumAsync(x => x.e.QuantityDelta, ct);
+                    var returned = await db.Documents.Where(d => d.Kind == "supplier-return" && d.WarehouseId == actor.WarehouseId && d.ItemId == item.Id && d.Source == reference).SumAsync(d => d.Quantity, ct);
+                    Require(q <= limit - returned, "source");
                     Require(q <= source.OnHand - source.Committed, "shortage");
                     Change(source, -q, p.Text("source"));
                     AddDoc("supplier-return", item.Id, q, p.Text("source")).Actual = q;

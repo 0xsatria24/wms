@@ -1,0 +1,40 @@
+name: Verify Inventory WMS
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_PASSWORD: ci-tests-only
+        ports: [55432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      WMS_TEST_ADMIN: Host=127.0.0.1;Port=55432;Database=postgres;Username=postgres;Password=ci-tests-only
+      WMS_PG_DOCKER: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: prototype/package-lock.json
+      - run: dotnet restore InventoryWms.sln
+      - run: dotnet test backend/Wms.Tests/Wms.Tests.csproj --configuration Release --no-restore --logger 'trx;LogFileName=ci.trx'
+      - run: npm ci --no-audit --no-fund
+        working-directory: prototype
+      - run: npm run build
+        working-directory: prototype
+      - run: node --experimental-transform-types --test tests/*.test.mjs
+        working-directory: prototype
+      - run: for script in scripts/*-production.sh scripts/release-recovery-hold.sh; do bash -n "$script"; done

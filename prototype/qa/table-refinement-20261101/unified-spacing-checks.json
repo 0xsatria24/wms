@@ -1,0 +1,252 @@
+[
+  {
+    "route": "stock",
+    "headers": [
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 48,
+        "padding": "0px 12px"
+      }
+    ],
+    "overflow": false,
+    "padding": [
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px"
+    ],
+    "rows": [
+      49,
+      49,
+      49,
+      49,
+      49,
+      0,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48
+    ]
+  },
+  {
+    "route": "master",
+    "headers": [
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      }
+    ],
+    "overflow": false,
+    "padding": [
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px"
+    ],
+    "rows": [
+      49,
+      49,
+      49,
+      49
+    ]
+  },
+  {
+    "route": "access",
+    "headers": [
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      }
+    ],
+    "overflow": false,
+    "padding": [
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px"
+    ],
+    "rows": [
+      49,
+      49,
+      49
+    ]
+  },
+  {
+    "route": "receiving",
+    "headers": [
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      },
+      {
+        "height": 44,
+        "padding": "0px 12px"
+      }
+    ],
+    "overflow": false,
+    "padding": [
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px",
+      "2px 12px"
+    ],
+    "rows": [
+      49,
+      48
+    ]
+  }
+]
