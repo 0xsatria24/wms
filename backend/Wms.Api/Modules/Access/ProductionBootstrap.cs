@@ -12,12 +12,13 @@ public static class ProductionBootstrap
 {
     public static async Task Run(WmsDb db, BootstrapRequest input, CancellationToken ct = default)
     {
+        input = input with { Warehouses = input.Warehouses?.Select(w => w with { Id = (w.Id ?? "").Trim(), Name = (w.Name ?? "").Trim(), StorageLocations = w.StorageLocations?.Select(c => (c ?? "").Trim()).ToArray() ?? [] }).ToArray() ?? [] };
         Require(Uri.TryCreate(input.Issuer, UriKind.Absolute, out var issuer) && issuer.Scheme == "https" && !string.IsNullOrWhiteSpace(input.Subject), "bootstrap-identity", 400);
         Require(System.Net.Mail.MailAddress.TryCreate(input.Email, out var email) && email.Address == input.Email && !string.IsNullOrWhiteSpace(input.Name), "bootstrap-identity", 400);
         Require(input.Warehouses is { Length: > 0 and <= 100 } && input.Warehouses.Select(w => w.Id).Distinct().Count() == input.Warehouses.Length, "bootstrap-warehouses", 400);
         foreach (var wh in input.Warehouses)
         {
-            Require(System.Text.RegularExpressions.Regex.IsMatch(wh.Id, "^[a-zA-Z0-9_-]{1,64}$") && wh.Id != "transit" && !string.IsNullOrWhiteSpace(wh.Name), "bootstrap-warehouse", 400);
+            Require(System.Text.RegularExpressions.Regex.IsMatch(wh.Id, "^[a-zA-Z0-9_-]{1,64}$") && wh.Id != "transit" && !string.IsNullOrWhiteSpace(wh.Name) && wh.Name.Length <= 200, "bootstrap-warehouse", 400);
             Require(wh.StorageLocations is { Length: > 0 and <= 1000 } && wh.StorageLocations.Distinct().Count() == wh.StorageLocations.Length, "bootstrap-locations", 400);
             Require(wh.StorageLocations.All(code => !string.IsNullOrWhiteSpace(code) && code.Length <= 100 && !code.Contains('|') && code is not "Receiving" and not "QC" and not "Staging"), "bootstrap-locations", 400);
         }

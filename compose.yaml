@@ -26,6 +26,12 @@ services:
       ReverseProxy__KnownProxies: ${WEB_PROXY_IP:-172.30.64.10}
       DataProtection__KeyPath: /var/wms/keys
       Company__Name: ${WMS_COMPANY_NAME:?Set WMS_COMPANY_NAME}
+      Setup__Enabled: ${WMS_SETUP_ENABLED:-false}
+      Setup__CodeHash: ${WMS_SETUP_CODE_HASH:-}
+      Setup__ExpiresAt: ${WMS_SETUP_EXPIRES_AT:-}
+      Setup__Warehouse__Id: ${WMS_SETUP_WAREHOUSE_ID:-}
+      Setup__Warehouse__Name: ${WMS_SETUP_WAREHOUSE_NAME:-}
+      Setup__Warehouse__StorageLocations__0: ${WMS_SETUP_STORAGE_LOCATION:-}
       Erp__Enabled: ${ERP_ENABLED:-false}
       Erp__DispatchPaused: ${ERP_DISPATCH_PAUSED:-true}
       ErpIngress__Enabled: ${ERP_INGRESS_ENABLED:-false}

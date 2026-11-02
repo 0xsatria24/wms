@@ -48,9 +48,18 @@ procedure InitializeWizard;
 begin
   ConfigPage := CreateInputFilePage(wpSelectDir, 'Company configuration',
     'Select the prepared client JSON configuration',
-    'PostgreSQL 18, trusted localhost HTTPS certificate, SSO callbacks and the migrated WMS database must already be prepared. Stop both WMS services before an upgrade. Database and ProgramData are retained on uninstall.');
+    'Prepare PostgreSQL 18, trusted localhost HTTPS, SSO, a migrated database and initial warehouse configuration. For a new database, setup activation is generated automatically. Stop both WMS services before an upgrade. Database and ProgramData are retained on uninstall.');
   ConfigPage.Add('Client configuration JSON:', 'JSON files|*.json', '.json');
   ConfigPage.Values[0] := ExpandConstant('{param:CONFIG|}');
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpFinished then
+    WizardForm.FinishedLabel.Caption := WizardForm.FinishedLabel.Caption + #13#10#13#10 +
+      'If activation was generated automatically, IT can retrieve the code from:' + #13#10 +
+      ExpandConstant('{commonappdata}\InventoryWms\secrets\setup-code.txt') + #13#10 +
+      'Open this file as an Administrator and deliver the code privately. The code expires after 24 hours. Existing installations keep their setup configuration.';
 end;
 
 function RunDeployment(Script, Parameters: String): Boolean;

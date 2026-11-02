@@ -31,9 +31,14 @@ foreach ($entry in $services) {
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Run installation as Administrator.' }
 
+$probe = @(& (Join-Path $InstallDir 'api\Wms.Api.exe') --environment Production --contentRoot (Join-Path $InstallDir 'api') --deployment-config $ConfigPath --installation-state)
+if ($LASTEXITCODE -ne 0 -or $probe[-1] -notin @('empty', 'initialized')) { throw 'Database state could not be verified. Complete migrations or ask IT to inspect the database.' }
+$installationState = $probe[-1]
+
 if (-not (Test-Path -LiteralPath $dataDir)) { New-Item -ItemType Directory -Path $dataDir | Out-Null }
 else { Assert-WmsDataPathSafe $dataDir }
 Set-WmsPrivateDirectory $dataDir
+Initialize-WmsSetup $config $dataDir $installationState
 $keys = Join-Path $dataDir 'keys'
 $heartbeat = Join-Path $dataDir 'worker-state'
 $certDir = Join-Path $dataDir 'certificates'
@@ -84,13 +89,14 @@ try {
     $ready = $false
     $origin = $config.Kestrel.Endpoints.Https.Url.TrimEnd('/')
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        try { if ((Invoke-WebRequest "$origin/health/ready" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200) { $ready = $true; break } } catch { }
+        try { if ((Invoke-WebRequest "$origin/health/setup-ready" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200) { $ready = $true; break } } catch { }
         Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw 'API is not ready. Check Windows Application events, database migrations and TLS. Services have been stopped.' }
     Start-Service 'InventoryWms.Worker'
     "[InternetShortcut]`r`nURL=$origin/" | Set-Content -LiteralPath (Join-Path $InstallDir 'Inventory WMS.url') -Encoding ASCII
     Write-Host "Installed. Open $origin. Persistent data: $dataDir"
+    if ($installationState -eq 'empty' -and (Test-Path -LiteralPath (Join-Path $dataDir 'secrets\setup-code.txt'))) { Write-Host "Setup code (IT administrators only): $(Join-Path $dataDir 'secrets\setup-code.txt'). No code is written to the installer log." }
 } catch {
     foreach ($name in @('InventoryWms.Worker', 'InventoryWms.Api')) { Stop-Service $name -ErrorAction SilentlyContinue }
     throw

@@ -58,6 +58,12 @@ export const warehouseSettings = (warehouse: string) => request<any>(`/api/works
 export const saveWarehouseSettings = (warehouse: string, section: string, value: unknown) => request<any>(`/api/workspaces/${encodeURIComponent(warehouse)}/settings/${section}`, value);
 export const addStorageLocation = (warehouse: string, name: string) => request("/api/edit", { type: "locationMaster", warehouse, payload: { name, pickable: true } });
 let csrf = "";
+export const setupStatus = () => request<{state: string; companyName: string}>("/api/setup/status");
+export async function setupSession() {
+  const value = await request<any>("/api/setup/session"); csrf = value.csrfToken; return value;
+}
+export const setupActivate = (code: string) => request("/api/setup/activate", {code}, undefined, false);
+export const setupComplete = () => request("/api/setup/complete", {}, undefined, false);
 export async function session(): Promise<Session> {
   const value = await request<Session>("/api/session");
   csrf = value.csrfToken;

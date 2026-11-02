@@ -35,6 +35,16 @@ Bootstrap hanya untuk database baru. Database yang sudah diinisialisasi akan dit
 
 ## Instalasi
 
+### Alternatif: wizard admin pertama
+
+Installer Windows sekarang membuat aktivasi otomatis untuk database baru yang sudah dimigrasikan. IT cukup menyiapkan konfigurasi database/HTTPS/SSO serta `Setup.Warehouse`; biarkan `CodeHash` dan `ExpiresAt` kosong. Installer memeriksa status database melalui CLI baca saja `--installation-state`, membuat kode acak di `%ProgramData%\InventoryWms\secrets\setup-code.txt` (hanya Administrators/SYSTEM), dan memasukkan hash/expiry ke konfigurasi API sebelum service dimulai. Tidak perlu menjalankan helper, menyalin JSON aktivasi atau restart API manual. Halaman akhir installer menampilkan lokasi berkas, bukan kode. IT membuka berkas sebagai Administrator dan menyerahkannya secara privat; berlaku 24 jam. Upgrade mempertahankan konfigurasi aktivasi terpasang; database yang sudah diinisialisasi tidak mendapat kode baru. CLI/bootstrap dan helper manual di bawah tetap menjadi alternatif IT.
+
+Untuk database baru, bootstrap manual dapat diganti wizard. Jalankan `--migrate-only` dengan konfigurasi production dahulu. Buat kode privat dengan `scripts/new-setup-code.ps1 -OutputDirectory 'C:\WmsProvisioning\setup-NEW'` (direktori harus baru). Gabungkan bagian `Setup` dari `setup-config.json` ke konfigurasi klien. IT juga wajib mengisi `Setup:Warehouse:Id`, `Setup:Warehouse:Name`, dan array `Setup:Warehouse:StorageLocations` dengan satu gudang/lokasi aktual sebelum instalasi; lihat struktur pada contoh konfigurasi. Berikan `activation-code.txt` hanya kepada penanggung jawab. Jangan commit kedua file. Default berlaku 24 jam; sesi browser maksimal 30 menit.
+
+Installer memeriksa `/health/setup-ready`: skema sudah dimigrasikan dan siap operasional atau siap setup. `/health/ready` tetap 503 sebelum setup selesai. Buka aplikasi, masukkan kode, login SSO dengan email terverifikasi, tinjau akun admin dan selesaikan. Tidak ada tahap pengisian gudang dalam wizard. Setelah sukses, login normal sebagai admin. CLI bootstrap tetap tersedia sebagai alternatif.
+
+Jika respons submit terputus, gunakan Periksa status setup sebelum mencoba lagi. Untuk kode kedaluwarsa, buat direktori provisioning baru, ganti konfigurasi Setup dan restart API; cookie lama tidak berlaku. Database parsial harus diperiksa IT dan tidak ditimpa wizard. Menghapus admin tidak membuka kembali setup.
+
 Jalankan `InventoryWms-Setup.exe` sebagai Administrator dan pilih berkas konfigurasi klien. Aplikasi dipasang di Program Files. Installer melakukan validasi sebelum menyalin aplikasi: PostgreSQL 18/service aktif, PFX/private key/masa berlaku/trust Local Computer, HTTPS localhost, SSO terisi, demo dan migrasi otomatis nonaktif, serta kepemilikan/status service lama. Folder data yang sudah ada dengan owner/izin tidak terpercaya atau reparse point ditolak; administrator perlu memperbaikinya sebelum mencoba lagi. Bila validasi gagal, jalankan pemeriksaan terminal berikut dari payload untuk pesan terperinci:
 
 ```powershell

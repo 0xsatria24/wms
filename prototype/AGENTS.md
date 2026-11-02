@@ -1,5 +1,9 @@
 # Prototype Instructions
 
+- Admin wizard scope correction, 3 November 2026: only Activation, Administrator/SSO and Review remain (numbered 1–3). Do not show a warehouse/location form or warehouse summary in the wizard. Initial warehouse provisioning belongs to IT configuration; review only the verified administrator and company.
+
+- Admin setup wizard polish, 3 November 2026: the user rejected disorganized text and boxes. Keep a compact step navigation with a visible active step, aligned form/summary labels, restrained introductory copy, and clearly separated primary, back and status-check actions. Use Product Design, antislop during, and Impeccable for this refinement; preserve the approved setup flow and backend contracts.
+
 Run the local server yourself and open the preview in the browser available to this environment. Do not give the user server-start instructions when you can run it.
 
 Before making substantial visual changes, use the Product Design plugin's `get-context` skill when the visual source is unclear or no longer matches the current goal. When the user gives durable prototype-specific design feedback, preferences, or decisions, record them in `AGENTS.md`.

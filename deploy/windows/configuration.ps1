@@ -19,6 +19,38 @@ function Read-WmsClientConfiguration([string]$ConfigPath) {
     return $config
 }
 
+function Initialize-WmsSetup($Config, [string]$DataDir, [string]$InstallationState) {
+    if ($InstallationState -notin @('empty', 'initialized')) { throw 'Cannot determine database initialization state.' }
+    $installedConfig = Join-Path $DataDir 'appsettings.client.json'
+    if (Test-Path -LiteralPath $installedConfig) {
+        $installed = Get-Content -LiteralPath $installedConfig -Raw | ConvertFrom-Json
+        if ($installed.Setup) { $Config | Add-Member -NotePropertyName Setup -NotePropertyValue $installed.Setup -Force }
+    }
+    if ($InstallationState -eq 'initialized') { return }
+    $warehouse = $Config.Setup.Warehouse
+    if (-not $warehouse -or [string]::IsNullOrWhiteSpace($warehouse.Id) -or [string]::IsNullOrWhiteSpace($warehouse.Name) -or @($warehouse.StorageLocations).Count -lt 1) { throw 'IT must configure Setup.Warehouse before installing a new database.' }
+    if (-not [string]::IsNullOrWhiteSpace($Config.Setup.CodeHash)) { return }
+    $secrets = Join-Path $DataDir 'secrets'
+    if (-not (Test-Path -LiteralPath $secrets)) { New-Item -ItemType Directory -Path $secrets | Out-Null }
+    Set-WmsPrivateDirectory $secrets
+    $codePath = Join-Path $secrets 'setup-code.txt'
+    if (Test-Path -LiteralPath $codePath) {
+        # Retry an interrupted installation with the same private code.
+        $code = (Get-Content -LiteralPath $codePath -Raw).Trim()
+        if ($code -notmatch '^[a-zA-Z0-9_-]{43}$') { throw 'Existing setup code is invalid; IT review is required.' }
+    } else {
+        $bytes = New-Object byte[] 32
+        $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+        $code = [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+        $stream = [IO.File]::Open($codePath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try { $encoded = [Text.Encoding]::ASCII.GetBytes($code); $stream.Write($encoded, 0, $encoded.Length) } finally { $stream.Dispose() }
+    }
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $hash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($code))).Replace('-','') } finally { $sha.Dispose() }
+    $Config.Setup | Add-Member -NotePropertyMembers @{ Enabled=$true; CodeHash=$hash; ExpiresAt=[DateTimeOffset]::UtcNow.AddHours(24).ToString('O') } -Force
+}
+
 function Test-WmsPrerequisites($Config) {
     $postgres = Join-Path $Config.PostgreSqlBin 'postgres.exe'
     if (-not (Test-Path -LiteralPath $postgres)) { throw 'PostgreSQL binaries were not found.' }

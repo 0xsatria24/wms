@@ -28,7 +28,24 @@ public static class SsoEnrollment
         }
         var db = context.HttpContext.RequestServices.GetRequiredService<WmsDb>();
         var ct = context.HttpContext.RequestAborted;
+        if (context.Properties?.Items.TryGetValue(SetupService.Flow, out var nonce) == true)
+        {
+            var setup = context.HttpContext.RequestServices.GetRequiredService<SetupService>();
+            var ticket = setup.Read(context.HttpContext);
+            var email = principal.FindFirstValue("email")?.Trim().ToLowerInvariant() ?? "";
+            if (await setup.State(ct) != "required" || ticket is null || ticket.Nonce != nonce || !Verified(principal) || !System.Net.Mail.MailAddress.TryCreate(email, out var address) || address.Address != email)
+            {
+                context.HandleResponse();
+                context.Response.Redirect("/#setup-expired");
+                return;
+            }
+            setup.Write(context.HttpContext, ticket with { Identity = new(issuer, subject, email, principal.FindFirstValue("name") ?? email) });
+            context.HandleResponse();
+            context.Response.Redirect("/");
+            return;
+        }
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await SetupService.EnrollmentLock(db, ct);
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:users"}, 0))", ct);
         var existing = await db.Principals.SingleOrDefaultAsync(p => p.Subject == subject && p.Issuer == issuer, context.HttpContext.RequestAborted);
         if (existing?.Status is "deleted" or "revoked" or "rejected")

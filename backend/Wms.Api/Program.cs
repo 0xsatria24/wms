@@ -26,7 +26,7 @@ if (args.Contains("--healthcheck", StringComparer.Ordinal))
     try
     {
         using var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-        Environment.ExitCode = (await probe.GetAsync("http://127.0.0.1:8080/health/ready")).IsSuccessStatusCode ? 0 : 1;
+        Environment.ExitCode = (await probe.GetAsync("http://127.0.0.1:8080/health/setup-ready")).IsSuccessStatusCode ? 0 : 1;
     }
     catch (HttpRequestException) { Environment.ExitCode = 1; }
     catch (TaskCanceledException) { Environment.ExitCode = 1; }
@@ -43,6 +43,7 @@ var erpIngressEnabled = builder.Configuration.GetValue<bool>("ErpIngress:Enabled
 var connection = builder.Configuration.GetConnectionString("Wms") ?? throw new InvalidOperationException("Configure ConnectionStrings:Wms.");
 builder.Services.AddDbContext<WmsDb>(o => o.UseNpgsql(connection));
 builder.Services.AddScoped<AccessService>();
+builder.Services.AddScoped<SetupService>();
 builder.Services.AddScoped<CommandProcessor>();
 builder.Services.AddScoped<SnapshotQuery>();
 builder.Services.AddScoped<EditService>();
@@ -79,7 +80,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         options.KnownProxies.Add(IPAddress.Parse(value));
 });
 var keyPath = builder.Configuration["DataProtection:KeyPath"];
-if (!demo && !args.Contains("--bootstrap", StringComparer.Ordinal))
+if (!demo && !args.Contains("--bootstrap", StringComparer.Ordinal) && !args.Contains("--installation-state", StringComparer.Ordinal))
 {
     if (string.IsNullOrWhiteSpace(keyPath) || (!directHttps && string.IsNullOrWhiteSpace(builder.Configuration["ReverseProxy:KnownProxies"])))
         throw new InvalidOperationException("Production requires DataProtection:KeyPath and ReverseProxy:KnownProxies.");
@@ -143,6 +144,14 @@ app.Use(async (context, next) => { if (context.Request.Path.StartsWithSegments("
 app.MapGet("/health/live", () => Results.Ok(new { status = "up" }));
 app.MapGet("/health/ready", async (WmsDb db, CancellationToken ct) => await db.Database.CanConnectAsync(ct) && await db.Settings.AnyAsync(ct) && await db.Warehouses.AnyAsync(w => w.Id != "transit", ct) ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503));
 app.MapSettings();
+app.MapGet("/health/setup-ready", async (WmsDb db, SetupService setup, CancellationToken ct) => {
+    try {
+        if ((await db.Database.GetPendingMigrationsAsync(ct)).Any()) return Results.StatusCode(503);
+        var state = await setup.State(ct);
+        return state is "completed" or "required" ? Results.Ok(new { status = state == "required" ? "setup-required" : "ready" }) : Results.StatusCode(503);
+    } catch (Npgsql.NpgsqlException) { return Results.StatusCode(503); }
+});
+if (!demo) app.MapSetup();
 app.MapGet("/api/session", async (HttpContext context, IAntiforgery csrf, AccessService access, CancellationToken ct) =>
 {
     var token = csrf.GetAndStoreTokens(context);
@@ -184,6 +193,7 @@ app.MapPost("/api/access/request", async (JsonElement payload, WmsDb db, Cancell
     var name = payload.Text("name").Trim();
     Rules.Require(email.Length is > 3 and < 254 && email.Contains('@') && name.Length is > 0 and < 200, "required", 400);
     await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    await SetupService.EnrollmentLock(db, ct);
     var acquired = await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock(hashtextextended({"edit:demo:users"}, 0)) AS \"Value\"").SingleAsync(ct);
     Rules.Require(acquired, "enrollment-busy", 429);
     if (!await db.Principals.AnyAsync(p => p.Email.ToLower() == email, ct))
@@ -285,6 +295,20 @@ else
     app.MapPost("/api/rfid/observations", () => Results.Problem("Gateway identity and reader registration must be configured.", statusCode: 503));
 app.MapHub<WorkspaceHub>("/hubs/workspace");
 var bootstrapIndex = Array.IndexOf(args, "--bootstrap");
+if (args.Contains("--installation-state", StringComparer.Ordinal))
+{
+    Rules.Require(!demo, "installation-state-production", 400);
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<WmsDb>();
+    Rules.Require(!(await db.Database.GetPendingMigrationsAsync()).Any(), "installation-migrations-required", 409);
+    var settings = await db.Settings.AnyAsync();
+    var warehouses = await db.Warehouses.AnyAsync();
+    var principals = await db.Principals.AnyAsync();
+    if (!settings && !warehouses && !principals) Console.WriteLine("empty");
+    else if (settings && await db.Warehouses.AnyAsync(w => w.Id != "transit")) Console.WriteLine("initialized");
+    else throw new InvalidOperationException("Installation data is incomplete; IT review is required.");
+    return;
+}
 if (bootstrapIndex >= 0)
 {
     Rules.Require(!demo && bootstrapIndex + 1 < args.Length, "bootstrap-configuration", 400);

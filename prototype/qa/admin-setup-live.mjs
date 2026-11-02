@@ -1,0 +1,30 @@
+import { chromium } from 'file:///C:/Users/muham/AppData/Local/npm-cache/_npx/9833c18b2d85bc59/node_modules/playwright/index.mjs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const output = 'qa/admin-setup-three-steps-20261103';
+await mkdir(output, {recursive:true});
+const browser = await chromium.launch({headless:true,channel:'chrome'});
+const page = await browser.newPage({viewport:{width:1440,height:1000}});
+let stage='activation', state='required', lost=false;
+const errors=[]; page.on('pageerror', e=>errors.push(e.message));
+await page.route('**/api/session', r=>r.fulfill({json:{mode:'oidc',csrfToken:'fixture',user:null}}));
+await page.route('**/api/setup/status', r=>r.fulfill({json:{state,companyName:'QA fixture company'}}));
+await page.route('**/api/setup/session', r=>r.fulfill({json:{stage,csrfToken:'fixture',identity:stage==='review'?{name:'QA fixture admin',email:'admin@example.test'}:null}}));
+await page.route('**/api/setup/activate', async r=> {if(JSON.parse(r.request().postData()).code!=='fixture'){await r.fulfill({status:403,json:{code:'setup-code'}});return;}stage='identity';await r.fulfill({status:204});});
+await page.route('**/auth/setup-login', r=>{stage='review';return r.fulfill({status:302,headers:{location:'/'}});});
+await page.route('**/api/setup/complete', async r=>{state='completed';if(lost)await r.abort();else await r.fulfill({status:204});});
+const results=[];
+try {
+ await page.goto('http://127.0.0.1:5187/');
+ await page.getByLabel('Activation code',{exact:true}).fill('wrong');await page.getByRole('button',{name:'Activate setup',exact:true}).click();await page.getByRole('alert').waitFor();results.push('invalid activation shows error');
+ await page.getByLabel('Activation code',{exact:true}).fill('fixture');await page.getByRole('button',{name:'Activate setup',exact:true}).click();await page.getByRole('button',{name:'Continue with SSO'}).click();
+ await page.getByRole('heading',{name:'Review your setup',exact:true}).waitFor();assert.equal(await page.locator('.setup-steps li').count(),3);assert.equal(await page.getByLabel('Warehouse ID',{exact:true}).count(),0);assert.equal(await page.getByLabel('Storage locations',{exact:true}).count(),0);results.push('SSO opens review directly; exactly three steps and no warehouse form');
+ await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:'Continue with SSO',exact:true}).click();await page.getByRole('heading',{name:'Review your setup',exact:true}).waitFor();results.push('back returns to SSO; re-verification returns to review');
+ await page.screenshot({path:`${output}/review-desktop.png`,fullPage:true});
+ await page.setViewportSize({width:360,height:850});await page.getByLabel('Language',{exact:true}).selectOption('id');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:`${output}/review-mobile-id.png`,fullPage:true});
+ await page.keyboard.press('Tab');assert.notEqual(await page.evaluate(()=>document.activeElement.tagName),'BODY');results.push('360px Indonesian review has no page overflow; keyboard focus works');
+ lost=true;await page.getByRole('button',{name:'Selesaikan setup dan buat admin',exact:true}).click();await page.getByRole('button',{name:'Masuk ke aplikasi',exact:true}).waitFor();results.push('lost submit response reads completed status and shows success');
+ state='blocked';await page.reload();await page.getByLabel('Language',{exact:true}).selectOption('id');await page.getByText('Setup belum tersedia.',{exact:false}).waitFor();results.push('partial database displays IT guidance');
+ state='required';stage='activation';await page.reload();await page.getByLabel('Language',{exact:true}).selectOption('id');await page.getByLabel('Kode aktivasi',{exact:true}).waitFor();await page.getByRole('button',{name:'Periksa status setup'}).click();await page.getByLabel('Kode aktivasi',{exact:true}).waitFor();results.push('status check returns expired session to activation');
+ assert.deepEqual(errors,[]);await writeFile(`${output}/results.json`,JSON.stringify({evidence:'UI fixtures only; OIDC redirects simulated, not real provider authentication',results,errors},null,2));console.log(results.join('\n'));
+} finally {await browser.close();}

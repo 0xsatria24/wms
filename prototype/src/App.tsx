@@ -29,6 +29,7 @@ import {
 } from "./ui.tsx";
 import { screens } from "./catalog";
 import { Auth, Workspace } from "./account.tsx";
+import { SetupGate } from "./SetupWizard";
 import { Settings } from "./Settings";
 import { Stock } from "./Stock.tsx";
 import { Operations } from "./Operations.tsx";
@@ -47,7 +48,7 @@ export function App() {
   const [locale, setLocale] = useState("en");
   return (
     <Locale.Provider value={locale}>
-      <Application locale={locale} setLocale={setLocale} />
+      <SetupGate locale={locale} setLocale={setLocale}><Application locale={locale} setLocale={setLocale} /></SetupGate>
     </Locale.Provider>
   );
 }
