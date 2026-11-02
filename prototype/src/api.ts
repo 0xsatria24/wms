@@ -43,6 +43,20 @@ export class ApiError extends Error {
     super(code);
   }
 }
+export interface UserPreferences {
+  version: number;
+  language: string;
+  theme: string;
+  defaultWarehouse: string;
+  startPage: string;
+  pageSize: number;
+}
+export const defaultPreferences: UserPreferences = { version: 0, language: "en", theme: "light", defaultWarehouse: "", startPage: "workspace", pageSize: 10 };
+export const preferences = () => request<UserPreferences>("/api/preferences");
+export const savePreferences = (value: UserPreferences) => request<UserPreferences>("/api/preferences", value);
+export const warehouseSettings = (warehouse: string) => request<any>(`/api/workspaces/${encodeURIComponent(warehouse)}/settings`);
+export const saveWarehouseSettings = (warehouse: string, section: string, value: unknown) => request<any>(`/api/workspaces/${encodeURIComponent(warehouse)}/settings/${section}`, value);
+export const addStorageLocation = (warehouse: string, name: string) => request("/api/edit", { type: "locationMaster", warehouse, payload: { name, pickable: true } });
 let csrf = "";
 export async function session(): Promise<Session> {
   const value = await request<Session>("/api/session");
@@ -92,9 +106,10 @@ async function request<T = void>(
 export async function login(
   account: string,
   password: string,
+  rememberMe = false,
 ): Promise<SessionUser> {
   await session();
-  await request("/api/dev/login", { account, password });
+  await request("/api/dev/login", { account, password, rememberMe });
   const next = await session();
   if (!next.user) throw new ApiError("session-expired", 401);
   return next.user;
@@ -111,8 +126,11 @@ export async function deleteItem(
   await request("/api/edit", {
     type: "delete-master",
     warehouse,
-    payload: { sku, version },
+    payload: { sku, version, reason: "User confirmed item deletion" },
   });
+}
+export async function editRecord(warehouse: string, type: string, payload: any) {
+  await request("/api/edit", { type, warehouse, payload: wireQuantities(payload) });
 }
 export async function requestAccess(name: string, email: string) {
   await session();
@@ -180,10 +198,15 @@ export function uiSnapshot(value: any): any {
 }
 export async function snapshot(warehouse: string, options: Record<string, string | number | boolean> = {}) {
   const params = new URLSearchParams(Object.entries({ ...options, requestKey: JSON.stringify(options) }).map(([key, value]) => [key, String(value)]));
-  return uiSnapshot(
+  const value = uiSnapshot(
     await request(`/api/workspaces/${encodeURIComponent(warehouse)}/snapshot?${params}`),
   );
+  for (const key of ["receipts", "orders", "inspections", "putaways", "returnTasks", "transfers", "returns", "counts"]) {
+    value[key] = (value[key] || []).map((row: any) => ({ ...row, ...value.documentDates?.[row.id] }));
+  }
+  return value;
 }
+export const saveDocumentDates = (warehouse: string, value: any) => request("/api/edit", { type: "document-dates", warehouse, payload: value });
 export async function exportLedger(
   warehouse: string,
   sku: string,
@@ -206,7 +229,7 @@ export async function exportLedger(
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = "stock-movements.csv";
+  link.download = `stock-movements_${from || "beginning"}_${to || "latest"}_${new Date().toISOString().replaceAll(":", "-")}.csv`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -284,15 +307,17 @@ export async function send(
   mode: string = "normal",
 ): Promise<CommandResult> {
   if (mode === "rejected" || mode === "conflict") throw new ApiError(mode);
+  const existing = (await pending()).find(row => row.id === id);
   const row: PendingRequest = {
     id,
     request: { ...body, user },
     status: "offline",
-    created: new Date().toISOString(),
+    created: existing?.created || new Date().toISOString(),
   };
   if (mode === "offline" || !navigator.onLine) {
-    await queueWrite("put", row);
-    return { id, message: "offline" };
+    const status = existing?.status === "unknown" ? "unknown" : "offline";
+    await queueWrite("put", { ...row, status });
+    return { id, message: status };
   }
   await queueWrite("put", { ...row, status: "unknown" });
   try {
@@ -329,6 +354,19 @@ export async function retryOriginal(
     throw new ApiError("pending-owner", 403);
   const { user: ignored, ...body } = row.request;
   return send(row.id, body, user.id);
+}
+export async function checkOriginal(row: PendingRequest, user: SessionUser, warehouse: string): Promise<CommandResult> {
+  if (!row) throw new ApiError("source", 404);
+  if (row.request.user !== user.id || row.request.warehouse !== warehouse) throw new ApiError("pending-owner", 403);
+  if (!navigator.onLine) return { id: row.id, message: "unknown" };
+  try {
+    const result = await request<CommandResult>(`/api/requests/${encodeURIComponent(row.request.type)}/${encodeURIComponent(row.id)}?warehouse=${encodeURIComponent(warehouse)}`);
+    await queueWrite("delete", row.id);
+    return result;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return { id: row.id, message: "unknown" };
+    throw error;
+  }
 }
 export async function persistEdit(
   before: any,

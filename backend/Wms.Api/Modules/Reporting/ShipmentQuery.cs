@@ -11,7 +11,10 @@ public sealed class ShipmentQuery(WmsDb db)
     {
         Require(await db.Principals.AnyAsync(p => p.Id == actor.Id && p.Status == "active", ct) && await db.AccessGrants.AnyAsync(g => g.PrincipalId == actor.Id && g.WarehouseId == actor.WarehouseId && g.Role == actor.Role, ct), "denied", 403);
         var now = asOf ?? DateTimeOffset.UtcNow;
-        var local = now.ToOffset(TimeSpan.FromHours(7));
+        var zone = (await OperationalSettings.Read(db, "warehouse", actor.WarehouseId, new WarehouseDetails(), ct)).Value.TimeZone;
+        var offset = TimeZoneInfo.FindSystemTimeZoneById(zone).GetUtcOffset(now);
+        var hours = offset.TotalHours;
+        var local = now.ToOffset(offset);
         var start = new DateTimeOffset(local.Year - 2, 1, 1, 0, 0, 0, local.Offset).ToUniversalTime();
         var priorCutoff = now.AddYears(-1);
         var hidden = actor.Role == "operator" && await db.Documents.AnyAsync(d => d.Kind == "count" && d.Status != "closed" && d.WarehouseId == actor.WarehouseId && db.Items.Any(i => i.Id == d.ItemId && i.Sku == sku), ct);
@@ -19,8 +22,8 @@ public sealed class ShipmentQuery(WmsDb db)
         var shipments = from entry in db.Entries join movement in db.Movements on entry.MovementId equals movement.Id
             join position in db.Positions on entry.PositionId equals position.Id join location in db.Locations on position.LocationId equals location.Id join item in db.Items on position.ItemId equals item.Id
             where item.Sku == sku && item.CompanyId == "demo" && location.WarehouseId == actor.WarehouseId && movement.WarehouseId == actor.WarehouseId && movement.Kind == "ship" && entry.QuantityDelta < 0 && movement.PostedAt >= start && movement.PostedAt <= now
-            group new { entry, movement } by new { year = movement.PostedAt.AddHours(7).Year, month = movement.PostedAt.AddHours(7).Month, entry.Unit } into months
-            select new { months.Key.year, months.Key.month, unit = months.Key.Unit, qty = months.Sum(x => -x.entry.QuantityDelta), priorYtd = months.Sum(x => x.movement.PostedAt <= priorCutoff && x.movement.PostedAt.AddHours(7).Year == local.Year - 1 ? -x.entry.QuantityDelta : 0m) };
+            group new { entry, movement } by new { year = movement.PostedAt.AddHours(hours).Year, month = movement.PostedAt.AddHours(hours).Month, entry.Unit } into months
+            select new { months.Key.year, months.Key.month, unit = months.Key.Unit, qty = months.Sum(x => -x.entry.QuantityDelta), priorYtd = months.Sum(x => x.movement.PostedAt <= priorCutoff && x.movement.PostedAt.AddHours(hours).Year == local.Year - 1 ? -x.entry.QuantityDelta : 0m) };
         var rows = await shipments.ToListAsync(ct);
         decimal? Change(decimal value, decimal previous) => previous == 0 ? null : decimal.Round((value - previous) * 100 / previous, 1);
         var last = local.AddMonths(-1);

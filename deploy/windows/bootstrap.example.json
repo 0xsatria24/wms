@@ -1,0 +1,8 @@
+{
+  "issuer": "https://identity.example.com",
+  "subject": "REPLACE_WITH_VERIFIED_ADMIN_SUBJECT",
+  "email": "admin@example.com",
+  "name": "Warehouse administrator",
+  "warehouses": [{ "id": "main", "name": "Main warehouse", "storageLocations": ["A-01"] }],
+  "partialAllowed": false
+}

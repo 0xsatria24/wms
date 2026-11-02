@@ -15,22 +15,27 @@ public sealed class LedgerExport(WmsDb db)
         var rowsQuery = (from entry in db.Entries join movement in db.Movements on entry.MovementId equals movement.Id join position in db.Positions on entry.PositionId equals position.Id join loc in db.Locations on position.LocationId equals loc.Id join item in db.Items on position.ItemId equals item.Id where position.CompanyId == "demo" && loc.WarehouseId == actor.WarehouseId && item.Sku == sku && (string.IsNullOrEmpty(location) || loc.Code == location) select new { entry, movement, loc, item });
         if (!string.IsNullOrEmpty(query))
             rowsQuery = rowsQuery.Where(x => EF.Functions.ILike(x.movement.Id, $"%{query}%") || EF.Functions.ILike(x.movement.Source, $"%{query}%") || EF.Functions.ILike(x.movement.Kind, $"%{query}%"));
+        var zone = (await OperationalSettings.Read(db, "warehouse", actor.WarehouseId, new WarehouseDetails(), ct)).Value.TimeZone;
+        var generatedAt = DateTimeOffset.UtcNow.ToString("O");
+        WarehouseDates.Date(fromDate);
+        WarehouseDates.Date(toDate);
+        Rules.Require(string.IsNullOrEmpty(fromDate) || string.IsNullOrEmpty(toDate) || WarehouseDates.Date(fromDate) <= WarehouseDates.Date(toDate), "required", 400);
         if (!string.IsNullOrEmpty(fromDate))
         {
             Rules.Require(DateOnly.TryParseExact(fromDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var from), "required", 400);
-            var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+            var start = WarehouseDates.Start(from, zone);
             rowsQuery = rowsQuery.Where(x => x.movement.PostedAt >= start);
         }
         if (!string.IsNullOrEmpty(toDate))
         {
             Rules.Require(DateOnly.TryParseExact(toDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var to), "required", 400);
-            var end = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(7)).ToUniversalTime();
+            var end = WarehouseDates.Start(to.AddDays(1), zone);
             rowsQuery = rowsQuery.Where(x => x.movement.PostedAt < end);
         }
         var rows = await rowsQuery.OrderBy(x => x.movement.PostedAt).ThenBy(x => x.entry.Id).ToListAsync(ct);
-        var content = new StringBuilder("Warehouse,SKU,Source,Type,Location,Quantity,Unit,OccurredAt,PostedAt\r\n");
+        var content = new StringBuilder("Warehouse,SKU,Source,Type,Location,Quantity,Unit,OccurredAt,PostedAt,Actor,PeriodFrom,PeriodTo,WarehouseTimeZone,GeneratedAtUTC\r\n");
         foreach (var row in rows)
-            content.AppendLine(string.Join(',', new[] { Cell(actor.WarehouseId), Cell(row.item.Sku), Cell(row.movement.Source), Cell(row.movement.Kind), Cell(row.loc.Code), Rules.Number(row.entry.QuantityDelta), Cell(row.entry.Unit), Cell(row.movement.OccurredAt.ToString("O")), Cell(row.movement.PostedAt.ToString("O")) }));
+            content.AppendLine(string.Join(',', new[] { Cell(actor.WarehouseId), Cell(row.item.Sku), Cell(row.movement.Source), Cell(row.movement.Kind), Cell(row.loc.Code), Rules.Number(row.entry.QuantityDelta), Cell(row.entry.Unit), Cell(row.movement.OccurredAt.ToString("O")), Cell(row.movement.PostedAt.ToString("O")), Cell(row.movement.Actor), Cell(fromDate ?? ""), Cell(toDate ?? ""), Cell(zone), Cell(generatedAt) }));
         return [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(content.ToString())];
         static string Cell(string value)
         {

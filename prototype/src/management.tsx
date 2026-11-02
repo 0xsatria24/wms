@@ -9,10 +9,15 @@ import {
 } from "@phosphor-icons/react";
 import { itemCatalogPage } from "./item-catalog";
 import { useServerCatalogue } from "./server-catalogue";
+import { useBulkSelection } from "./selection";
+import { BulkActions } from "./BulkActions";
+import { canAccessAction } from "./bulk-model";
+import { downloadLabelSheet } from "./bulk-files";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { MAIN, SECONDARY, locations } from "./fixtures";
 import {
   useText,
+  useCataloguePageSize,
   Button,
   Field,
   Lookup,
@@ -29,7 +34,7 @@ import {
 } from "./ui.tsx";
 export { Controls } from "./controls.tsx";
 
-export function Access({ data, setData, user, flash, createUser, deleteUser }) {
+export function Access({ data, setData, user, flash, createUser, deleteUser, setCatalogueQuery, warehouse, editRecord, refresh }) {
   const t = useText();
   const [tab, setTab] = useState("users");
   const [selected, setSelected] = useState(null);
@@ -42,6 +47,25 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
   const [actionReason, setActionReason] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [usersPage, setUsersPage] = useState(1);
+  const server = useServerCatalogue(data, setCatalogueQuery, {
+    view: "access", status: tab === "pending" ? "pending" : "users", usersPage,
+  });
+  const paging = setCatalogueQuery ? data.userPage : null;
+  const loadingUsers = Boolean(setCatalogueQuery && !server);
+  const pendingTotal = paging?.pendingTotal ?? data.users.filter((u) => u.status === "pending").length;
+  const rows = data.users.filter(u => tab === "users" ? !["pending", "deleted"].includes(u.status) : u.status === "pending");
+  const bulk = useBulkSelection({ rows, scope: JSON.stringify([user.id, user.role, warehouse, tab, usersPage]), label: row => `${row.name} · ${row.email}`, allowed: row => ["active", "rejected", "revoked"].some(status => canAccessAction(status, row, user)), disabled: loadingUsers || !editRecord });
+  const accessActions = [
+    ["active", t("Approve selected access", "Setujui akses terpilih")],
+    ["rejected", t("Reject selected requests", "Tolak permintaan terpilih")],
+    ["revoked", t("Revoke selected access", "Cabut akses terpilih")],
+  ].map(([status, label]) => ({
+    id: status, label, reason: true, danger: status !== "active", allowed: row => canAccessAction(status, row, user),
+    description: t(`Existing roles and warehouse access are retained. Requests without access are approved as Operator in ${warehouse}.`, `Peran dan akses gudang yang sudah ada dipertahankan. Permintaan tanpa akses disetujui sebagai Operator di ${warehouse}.`),
+    perform: async (row, reason) => editRecord("access-status", { id: row.id, expectedStatus: row.status, status, reason }),
+    after: async () => { await refresh?.(); },
+  }));
   if (user.role !== "admin")
     return (
       <Panel>
@@ -53,11 +77,6 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
         </Notice>
       </Panel>
     );
-  const rows = data.users.filter((u) =>
-    tab === "users"
-      ? !["pending", "deleted"].includes(u.status)
-      : u.status === "pending",
-  );
   const startUserAction = (target = null) => {
     setUserAction({ target });
     setNewName("");
@@ -131,21 +150,23 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
       <Tabs
         label={t("User lists", "Daftar pengguna")}
         value={tab}
-        onChange={setTab}
+        onChange={(value) => { setTab(value); setUsersPage(1); }}
         items={[
           ["users", t("Users", "Pengguna")],
           [
             "pending",
             t(
-              `Pending approvals (${data.users.filter((u) => u.status === "pending").length})`,
-              `Menunggu persetujuan (${data.users.filter((u) => u.status === "pending").length})`,
+              `Pending approvals (${pendingTotal})`,
+              `Menunggu persetujuan (${pendingTotal})`,
             ),
           ],
         ]}
       />
+      <BulkActions selection={bulk} actions={accessActions} />
       <DataTable
         label={t("Users and warehouse access", "Pengguna dan akses gudang")}
         rows={rows}
+        selection={bulk}
         empty={
           tab === "users"
             ? t("No users yet.", "Belum ada user.")
@@ -190,14 +211,14 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
             render: (u) => (
               <div className="user-actions">
                 <Button
-                  disabled={u.id === user.id || actionBusy}
+                  disabled={u.id === user.id || actionBusy || loadingUsers}
                   onClick={() => open(u)}
                 >
                   {t("Review access", "Tinjau akses")}
                 </Button>
                 <Button
                   danger
-                  disabled={u.id === user.id || actionBusy}
+                  disabled={u.id === user.id || actionBusy || loadingUsers}
                   onClick={() => startUserAction(u)}
                 >
                   <Trash size={18} aria-hidden="true" />
@@ -208,6 +229,13 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
           },
         ]}
       />
+      {paging && (
+        <nav className="catalogue-pagination" aria-label={t("User pages", "Halaman pengguna")} aria-busy={loadingUsers}>
+          <span role="status">{loadingUsers ? t("Loading users…", "Memuat pengguna…") : t(`Page ${paging.page} of ${paging.pages} · ${paging.total} users`, `Halaman ${paging.page} dari ${paging.pages} · ${paging.total} pengguna`)}</span>
+          <Button disabled={loadingUsers || paging.page <= 1} onClick={() => setUsersPage(paging.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button>
+          <Button disabled={loadingUsers || paging.page >= paging.pages} onClick={() => setUsersPage(paging.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button>
+        </nav>
+      )}
       <Notice>
         {t(
           "Registration requests access; it does not grant an administrator role. Production authorization is not connected in this preview.",
@@ -419,7 +447,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser }) {
   );
 }
 
-export function Master({ data, setData, user, flash, deleteItem, setCatalogueQuery }) {
+export function Master({ data, setData, user, flash, deleteItem, setCatalogueQuery, warehouse, editRecord, refresh, locale = "en" }) {
   const t = useText();
   const [tab, setTab] = useState("items");
   const [sku, setSku] = useState("SKU-A");
@@ -441,7 +469,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
   const [category, setCategory] = useState("");
   const [sort, setSort] = useState("name");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useCataloguePageSize();
   const server = useServerCatalogue(data, tab === "items" ? setCatalogueQuery : undefined, { view: "master", query: deferredQuery, status, category, sort, page, pageSize, focusSku: sku });
   const localCatalogue = useMemo(
     () =>
@@ -456,6 +484,16 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
     [data.products, deferredQuery, status, category, sort, page, pageSize, server],
   );
   const catalogue = server ? { ...localCatalogue, ...server, rows: localCatalogue.rows } : localCatalogue;
+  const bulk = useBulkSelection({ rows: catalogue.rows, scope: JSON.stringify([user.id, user.role, warehouse, tab, query, status, category, sort, page, pageSize]), key: row => row.sku, label: row => `${row.name} · ${row.sku}`, disabled: query !== deferredQuery || !!setCatalogueQuery && !server || !editRecord });
+  const refreshBulk = async () => { await refresh?.(); };
+  const bulkActions = [
+    ...(["admin", "supervisor"].includes(user.role) ? [
+      { id: "activate", label: t("Activate selected", "Aktifkan terpilih"), allowed: row => !row.active, perform: async row => editRecord("master-status", { sku: row.sku, version: row.version, active: true }), after: refreshBulk },
+      { id: "deactivate", label: t("Deactivate selected", "Nonaktifkan terpilih"), reason: true, allowed: row => row.active, perform: async (row, reason) => editRecord("master-status", { sku: row.sku, version: row.version, active: false, reason }), after: refreshBulk },
+      { id: "delete", label: t("Delete selected", "Hapus terpilih"), confirmLabel: t("Yes", "Ya"), cancelLabel: t("No", "Tidak"), danger: true, description: t("Items referenced by stock, documents or labels cannot be deleted. Each item is validated by the server.", "Barang yang dirujuk stok, dokumen, atau label tidak dapat dihapus. Setiap barang divalidasi server."), perform: async row => editRecord("delete-master", { sku: row.sku, version: row.version, reason: "User confirmed item deletion" }), after: refreshBulk },
+    ] : []),
+    ...(["admin", "supervisor", "operator"].includes(user.role) ? [{ id: "labels", label: t("Download selected labels", "Unduh label terpilih"), allowed: row => row.active && !!row.barcode, description: t("Downloads a printable label sheet. Physical printing is not confirmed.", "Mengunduh lembar label siap cetak. Cetak fisik belum dikonfirmasi."), perform: async row => editRecord("labelHistory", { sku: row.sku, version: row.version, code: row.barcode, action: "download" }), complete: rows => downloadLabelSheet(rows, locale), after: refreshBulk }] : []),
+  ];
   const categories = useMemo(
     () =>
       [
@@ -694,8 +732,10 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
             )}
           </div>
           <div className="catalogue-table" aria-busy={query !== deferredQuery}>
+            <BulkActions selection={bulk} actions={bulkActions} />
             <DataTable
               label={t("Item catalogue", "Katalog barang")}
+              selection={bulk}
               rows={catalogue.rows.map((p) => ({ ...p, id: p.sku }))}
               empty={t(
                 "No items match these filters.",

@@ -7,6 +7,9 @@ import React, {
   useState,
 } from "react";
 import { AutocompleteInput } from "./Autocomplete";
+import { Reference } from "./Reference";
+import { SelectionCell, SelectionHeader, type BulkSelection } from "./selection";
+import { referenceColumns, isReferenceLabel } from "./reference-format";
 import type { Suggestion } from "./autocomplete-model";
 import {
   Info,
@@ -17,6 +20,13 @@ import {
 } from "@phosphor-icons/react";
 
 export const Locale = createContext("en");
+export const CataloguePageSize = createContext(10);
+export function useCataloguePageSize() {
+  const initial = useContext(CataloguePageSize);
+  const [size, setSize] = useState(initial);
+  useEffect(() => setSize(initial), [initial]);
+  return [size, setSize] as const;
+}
 export function useText() {
   const locale = useContext(Locale);
   return (en: string, id?: string) => (locale === "en" ? en : id || en);
@@ -140,15 +150,18 @@ export function Lookup({
   const [query, setQuery] = useState<string | null>(null);
   useEffect(() => setQuery(null), [value]);
   const selected = options.find((option) => option.value === value);
-  const label = selected
+  const fullLabel = selected
     ? selected.value && selected.value !== selected.label
+      && !selected.label.startsWith(`${selected.value} ·`)
       ? `${selected.value} · ${selected.label}`
       : selected.label
     : "";
+  const label = fullLabel;
   return (
     <AutocompleteInput
       {...props}
       value={query ?? label}
+      title={fullLabel || undefined}
       suggestions={options}
       filterQuery={query ?? ""}
       onValueChange={setQuery}
@@ -215,7 +228,7 @@ export function Notice({
       <Icon size={21} aria-hidden="true" />
       <div>
         {title && <strong>{title}</strong>}
-        {children && <div>{children}</div>}
+        {children && <div>{typeof children === "string" ? <Reference value={children} embedded /> : children}</div>}
       </div>
       {onClose && (
         <button
@@ -244,7 +257,7 @@ export function Panel({ title, children, className = "", action }: BoxProps) {
     <section className={`panel ${className}`}>
       {title && (
         <div className="panel-heading">
-          <h2>{title}</h2>
+          <h2>{typeof title === "string" ? <Reference value={title} /> : title}</h2>
           {action}
         </div>
       )}
@@ -268,7 +281,7 @@ export function Summary({ items }: { items: React.ReactNode[][] }) {
       {items.map(([label, value], i) => (
         <div key={i}>
           <dt>{label}</dt>
-          <dd>{value}</dd>
+          <dd>{typeof value === "string" && isReferenceLabel(label) ? <Reference value={value} /> : value}</dd>
         </div>
       ))}
     </dl>
@@ -341,11 +354,14 @@ export function DataTable({
   onSelect,
   selected,
   showSelectionMark = true,
+  selection,
 }: {
   columns: {
     key: string;
     label: string;
     numeric?: boolean;
+    width?: number;
+    className?: string;
     render?: (row: any) => React.ReactNode;
   }[];
   rows: any[];
@@ -354,16 +370,20 @@ export function DataTable({
   onSelect?: (row: any, index: number) => void;
   selected?: any;
   showSelectionMark?: boolean;
+  selection?: BulkSelection;
 }) {
+  const t = useText();
   return (
-    <div className="table-wrap">
-      <table className="data-table" aria-label={label}>
+    <div className="table-wrap" role={selection ? "region" : undefined} tabIndex={selection ? 0 : undefined} aria-label={selection ? t(`${label}; scroll horizontally for all columns`, `${label}; geser ke samping untuk semua kolom`) : undefined}>
+      <table className={`data-table${selection ? " has-bulk-selection" : ""}`} aria-label={label} style={columns.every(column => column.width > 0) ? { minWidth: columns.reduce((width, column) => width + column.width, selection ? 48 : 0) } : undefined}>
+        {columns.some(column => column.width) && <colgroup>{selection && <col style={{ width: 48 }} />}{columns.map(column => <col key={column.key} style={column.width ? { width: column.width } : undefined} />)}</colgroup>}
         <thead>
           <tr>
+            {selection && <SelectionHeader selection={selection} label={t("Select all on this page", "Pilih semua di halaman ini")} />}
             {columns.map((c) => (
               <th
                 key={c.key}
-                className={c.numeric ? "numeric" : ""}
+                className={[`column-${c.key}`, c.numeric ? "numeric" : "", c.className].filter(Boolean).join(" ")}
                 scope="col"
               >
                 {c.label}
@@ -375,13 +395,14 @@ export function DataTable({
           {rows.map((row, i) => (
             <tr
               key={row.id || i}
-              className={selected === (row.id || i) ? "selected" : ""}
+              className={[selected === (row.id || i) ? "selected" : "", selection?.checked(row) ? "bulk-selected" : ""].filter(Boolean).join(" ")}
             >
+              {selection && <SelectionCell selection={selection} row={row} label={t(`Select ${selection.label(row)}`, `Pilih ${selection.label(row)}`)} />}
               {columns.map((col, ci) => (
                 <td
                   key={col.key}
                   data-label={col.label}
-                  className={col.numeric ? "numeric" : ""}
+                  className={[`column-${col.key}`, col.numeric ? "numeric" : "", col.className].filter(Boolean).join(" ")}
                 >
                   {onSelect && ci === 0 ? (
                     <button
@@ -390,7 +411,7 @@ export function DataTable({
                       aria-pressed={selected === (row.id || i)}
                       onClick={() => onSelect(row, i)}
                     >
-                      {col.render ? col.render(row) : row[col.key]}
+                      {col.render ? col.render(row) : referenceColumns.has(col.key) && typeof row[col.key] === "string" ? <Reference value={row[col.key]} /> : row[col.key]}
                       {showSelectionMark && (
                         <CheckCircle
                           size={16}
@@ -403,7 +424,7 @@ export function DataTable({
                   ) : col.render ? (
                     col.render(row)
                   ) : (
-                    row[col.key]
+                    referenceColumns.has(col.key) && typeof row[col.key] === "string" ? <Reference value={row[col.key]} /> : row[col.key]
                   )}
                 </td>
               ))}
@@ -449,7 +470,7 @@ export function Modal({
       }}
     >
       <div className="modal-heading">
-        <h2 id={id}>{title}</h2>
+        <h2 id={id}>{typeof title === "string" ? <Reference value={title} /> : title}</h2>
         <button
           className="icon-button"
           type="button"
@@ -486,6 +507,10 @@ export function DownloadButton({ filename, rows, children }) {
 }
 export function errorText(code, t) {
   const messages = {
+    "login-rate-limit": [
+      "Too many sign-in attempts. Wait one minute before trying again.",
+      "Terlalu banyak percobaan masuk. Tunggu satu menit sebelum mencoba lagi.",
+    ],
     "recovery-hold": ["Write operations are paused for recovery reconciliation. Keep the original request ID and contact operations.", "Penulisan ditahan untuk rekonsiliasi pemulihan. Simpan ID permintaan asli dan hubungi pengelola operasi."],
     "user-duplicate": [
       "This email is already registered. Use a different email or contact your access administrator.",

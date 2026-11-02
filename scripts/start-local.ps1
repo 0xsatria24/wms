@@ -1,4 +1,4 @@
-param([switch]$SkipBuild)
+param([switch]$SkipBuild, [switch]$BackendOnly)
 . (Join-Path $PSScriptRoot 'local-environment.ps1')
 if (-not (Test-Path -LiteralPath (Join-Path $postgresData 'PG_VERSION'))) {
     throw 'This workspace does not contain the isolated development PostgreSQL cluster.'
@@ -9,13 +9,22 @@ if ($LASTEXITCODE -ne 0) {
     $databaseProcess.Id | Set-Content -LiteralPath (Join-Path $runtimePath 'postgres.pid')
 }
 $databaseReady = $false
-for ($attempt = 0; $attempt -lt 40; $attempt++) {
-    & (Join-Path $postgresBin 'pg_isready.exe') -h 127.0.0.1 -p 55432 *> $null
+Write-Host 'Waiting for development PostgreSQL (startup recovery can take a few minutes after reboot)...'
+for ($attempt = 0; $attempt -lt 600; $attempt++) {
+    & (Join-Path $postgresBin 'pg_isready.exe') -h 127.0.0.1 -p 55432 -t 1 *> $null
     if ($LASTEXITCODE -eq 0) { $databaseReady = $true; break }
-    Start-Sleep -Milliseconds 250
+    if ($attempt -gt 0 -and $attempt % 30 -eq 0) { Write-Host 'PostgreSQL is still starting; waiting for recovery to finish...' }
+    Start-Sleep -Seconds 1
 }
 if (-not $databaseReady) { throw 'Development PostgreSQL did not become ready. Check .runtime/pg-stderr.log.' }
-if (-not $SkipBuild) {
+$apiPidFile = Join-Path $runtimePath 'api.pid'
+$runningApi = $null
+if (Test-Path -LiteralPath $apiPidFile) {
+    $apiProcessId = [int](Get-Content -LiteralPath $apiPidFile)
+    $runningApi = Get-CimInstance Win32_Process -Filter "ProcessId=$apiProcessId" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like ('*' + $projectRoot + '*Wms.Api.dll*') }
+}
+if (-not $SkipBuild -and -not $runningApi) {
     & $dotnetPath build (Join-Path $projectRoot 'InventoryWms.sln') --no-restore
     if ($LASTEXITCODE -ne 0) { throw 'The .NET build failed.' }
 }
@@ -44,11 +53,15 @@ function Start-ProjectProcess([string]$Name, [string]$File, [string[]]$Arguments
 }
 Start-ProjectProcess 'api' $dotnetPath @(('"' + (Join-Path $projectRoot 'backend\Wms.Api\bin\Debug\net10.0\Wms.Api.dll') + '"'), '--contentRoot', ('"' + (Join-Path $projectRoot 'backend\Wms.Api') + '"')) 5080
 Start-ProjectProcess 'worker' $dotnetPath @(('"' + (Join-Path $projectRoot 'backend\Wms.Worker\bin\Debug\net10.0\Wms.Worker.dll') + '"'))
-$nodePath = (Get-Command node -ErrorAction Stop).Source
-$vitePath = Join-Path $projectRoot 'prototype\node_modules\vite\bin\vite.js'
-if (-not (Test-Path -LiteralPath $vitePath)) { throw 'Frontend dependencies are missing. Run npm ci inside prototype.' }
-Start-ProjectProcess 'web' $nodePath @(('"' + $vitePath + '"'), ('"' + (Join-Path $projectRoot 'prototype') + '"'), '--host', '127.0.0.1', '--port', '4173', '--strictPort') 4173
-foreach ($endpoint in @('http://127.0.0.1:5080/health/ready', 'http://127.0.0.1:4173/')) {
+if (-not $BackendOnly) {
+    $nodePath = (Get-Command node -ErrorAction Stop).Source
+    $vitePath = Join-Path $projectRoot 'prototype\node_modules\vite\bin\vite.js'
+    if (-not (Test-Path -LiteralPath $vitePath)) { throw 'Frontend dependencies are missing. Run npm ci inside prototype.' }
+    Start-ProjectProcess 'web' $nodePath @(('"' + $vitePath + '"'), ('"' + (Join-Path $projectRoot 'prototype') + '"'), '--host', '127.0.0.1', '--port', '4173', '--strictPort') 4173
+}
+$endpoints = @('http://127.0.0.1:5080/health/ready')
+if (-not $BackendOnly) { $endpoints += 'http://127.0.0.1:4173/' }
+foreach ($endpoint in $endpoints) {
     $ready = $false
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
         try {
@@ -58,4 +71,8 @@ foreach ($endpoint in @('http://127.0.0.1:5080/health/ready', 'http://127.0.0.1:
     }
     if (-not $ready) { throw "The local endpoint $endpoint did not become ready. Check .runtime logs." }
 }
-Write-Host 'Preview: http://127.0.0.1:4173/ (simulation data). Logs: .runtime/.'
+if ($BackendOnly) {
+    Write-Host 'API and database ready. Logs: .runtime/.'
+} else {
+    Write-Host 'Preview: http://127.0.0.1:4173/ (simulation data). Logs: .runtime/.'
+}

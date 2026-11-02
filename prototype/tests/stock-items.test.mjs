@@ -33,6 +33,20 @@ const options = {
   pageSize: 10,
 };
 
+test("item time uses only the latest movement of matching positions and never the refresh time", () => {
+  const positions = [
+    position({ lastMovementAt: "2026-11-02T01:00:00Z" }),
+    position({ location: "QC", lastMovementAt: "2026-11-02T03:00:00Z" }),
+    position({ warehouse: "Other", lastMovementAt: "2026-11-03T09:00:00Z" }),
+    position({ sku: "SKU-B", lastMovementAt: null }),
+  ];
+  assert.equal(stockItemPage(positions, products, options).items[0].lastMovementAt, positions[1].lastMovementAt);
+  const filtered = stockItemPage(positions, products, { ...options, location: "A-01" });
+  assert.equal(filtered.items[0].lastMovementAt, positions[0].lastMovementAt);
+  assert.equal(filtered.items[1].lastMovementAt, null);
+  assert.equal(stockItemPage([position({ lastMovementAt: "bad" })], products, options).items[0].lastMovementAt, null);
+});
+
 test("SKU grouping preserves warehouse boundaries and excludes restricted stock from Available", () => {
   const positions = [
     position({ frozen: true, reserved: 0 }),

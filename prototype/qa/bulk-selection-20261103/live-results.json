@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "route": "master",
+      "selectableRows": 4,
+      "selectionChecked": 2,
+      "status": "PASS"
+    },
+    {
+      "route": "stock",
+      "selectableRows": 3,
+      "selectionChecked": 2,
+      "status": "PASS"
+    },
+    {
+      "route": "labels",
+      "selectableRows": 4,
+      "selectionChecked": 2,
+      "status": "PASS"
+    },
+    {
+      "route": "orders",
+      "selectableRows": 1,
+      "selectionChecked": 1,
+      "status": "PASS"
+    },
+    {
+      "route": "access",
+      "selectableRows": 2,
+      "selectionChecked": 2,
+      "status": "PASS"
+    },
+    {
+      "route": "pending",
+      "selectableRows": 0,
+      "selectionChecked": 0,
+      "status": "PASS empty list"
+    },
+    {
+      "route": "integration",
+      "selectableRows": 7,
+      "selectionChecked": 2,
+      "status": "PASS"
+    },
+    {
+      "route": "rfid",
+      "selectableRows": 0,
+      "selectionChecked": 0,
+      "status": "PASS empty list"
+    }
+  ],
+  "errors": []
+}

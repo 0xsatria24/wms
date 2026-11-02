@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useDateTime, TableTimestamp } from "./DateTime";
+import { localDate } from "./date-time";
+import { Reference } from "./Reference";
 import JsBarcode from "jsbarcode";
 import {
   useText,
@@ -20,6 +23,11 @@ import { MAIN } from "./fixtures";
 import { exportLedger } from "./api";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { useServerCatalogue } from "./server-catalogue";
+import { useBulkSelection } from "./selection";
+import { BulkActions } from "./BulkActions";
+import { downloadLabelSheet } from "./bulk-files";
+import { itemCatalogPage } from "./item-catalog";
+import { canRetryEvent } from "./bulk-model";
 
 function LabelPreview({ code, name, labelRef }) {
   useEffect(() => {
@@ -59,17 +67,26 @@ export function Controls({
   checkPending,
   setCatalogueQuery,
   authMode,
+  editRecord,
+  bulkCommand,
+  recoverRequest,
+  refresh,
+  locale = "en",
 }) {
   const t = useText();
+  const { stamp: ts, zone, date } = useDateTime();
   const [query, setQuery] = useState("");
   const [sku, setSku] = useState(data.focusSku || data.products[0]?.sku || "");
   const [loc, setLoc] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [ledgerPage, setLedgerPage] = useState(1);
-  useServerCatalogue(data, setCatalogueQuery, { view: route, query, sku: ["movements", "tracking"].includes(route) ? sku : "", focusSku: sku, location: loc, from: fromDate, to: toDate, page: ledgerPage, pageSize: 25 });
-  useEffect(() => setLedgerPage(1), [sku, query, loc, fromDate, toDate]);
+  const [supportingPage, setSupportingPage] = useState(1);
   const [tab, setTab] = useState("labels");
+  const [labelPage, setLabelPage] = useState(1);
+  const labelsView = route === "labels" && tab === "labels";
+  const server = useServerCatalogue(data, setCatalogueQuery, { view: labelsView ? "master" : route, query, ...(labelsView ? { status: "active", sort: "sku" } : {}), sku: ["movements", "tracking"].includes(route) ? sku : "", focusSku: sku, location: loc, from: fromDate, to: toDate, page: labelsView ? labelPage : ledgerPage, pageSize: 25, supportingPage });
+  useEffect(() => setLedgerPage(1), [sku, query, loc, fromDate, toDate]);
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -80,23 +97,23 @@ export function Controls({
   const [excluded, setExcluded] = useState({});
   const [fallback, setFallback] = useState("");
   const [note, setNote] = useState("");
+  const labelCatalogue = itemCatalogPage(server && labelsView ? data.products.filter(row => server.ids.includes(row.sku)) : data.products, { query: labelsView ? query : "", status: "active", category: "", sort: "sku", page: setCatalogueQuery ? 1 : labelPage, pageSize: 25 });
+  const labelPaging = server && labelsView ? server : labelCatalogue;
+  const expectedTags = ["EPC-SIM-001", "EPC-SIM-002", "EPC-SIM-003"];
+  const bulkRows = route === "integration" ? data.events.filter(row => (row.warehouse || MAIN) === warehouse) : route === "pending" ? data.pending.filter(row => row.request.warehouse === warehouse && row.request.user === user.id) : labelsView ? labelCatalogue.rows : route === "rfid" ? [...new Set<string>(reads)].map(code => ({ id: code, code })) : [];
+  const bulk = useBulkSelection({ rows: bulkRows, scope: JSON.stringify([user.id, user.role, warehouse, route, tab, query, labelPage]), key: row => labelsView ? row.sku : row.id, label: row => labelsView ? `${row.name} · ${row.sku}` : row.id, allowed: row => route === "integration" ? canRetryEvent(row, user) : route === "rfid" ? !expectedTags.includes(row.code) && !excluded[row.code] : labelsView ? ["admin", "supervisor", "operator"].includes(user.role) && row.active : true, disabled: !!setCatalogueQuery && !server || route === "rfid" && reading || labelsView && !editRecord || route === "integration" && !bulkCommand || route === "pending" && !recoverRequest });
+  const afterBulk = async () => { await refresh?.(); };
   const labelRef = useRef<HTMLCanvasElement>(null);
   const product = data.products.find((p) => p.sku === sku) || data.products[0];
-  const ts = (stamp) =>
-    new Date(stamp).toLocaleString(undefined, { timeZone: "Asia/Bangkok" });
   const ledgerSources = data.ledger.filter(
     (m) =>
       m.warehouse === warehouse &&
       m.sku === sku &&
       (!loc || m.location === loc) &&
       (!fromDate ||
-        new Date(new Date(m.posted).getTime() + 7 * 3600000)
-          .toISOString()
-          .slice(0, 10) >= fromDate) &&
+        localDate(m.posted, zone) >= fromDate) &&
       (!toDate ||
-        new Date(new Date(m.posted).getTime() + 7 * 3600000)
-          .toISOString()
-          .slice(0, 10) <= toDate),
+        localDate(m.posted, zone) <= toDate),
   );
   const ledger = ledgerSources.filter((m) =>
     `${m.source} ${m.kind} ${m.id} ${m.transaction}`
@@ -109,6 +126,13 @@ export function Controls({
     { key: "type", label: t("Type", "Jenis") },
     { key: "status", label: t("Status", "Status") },
   ];
+  const loadingSupporting = Boolean(setCatalogueQuery && !server);
+  const periodFields = <div className="filter-bar">
+    <Field label={t(`From date (${zone})`, `Dari tanggal (${zone})`)} type="date" value={fromDate} max={toDate || undefined} onChange={e => setFromDate(e.target.value)} />
+    <Field label={t(`To date (${zone})`, `Sampai tanggal (${zone})`)} type="date" value={toDate} min={fromDate || undefined} onChange={e => setToDate(e.target.value)} />
+    <Button onClick={() => { setFromDate(""); setToDate(""); }}>{t("All dates", "Semua tanggal")}</Button>
+  </div>;
+  const supportingPaging = setCatalogueQuery ? data.supportingPage : null;
   if (
     !data.products.length &&
     ["movements", "tracking", "labels", "rfid"].includes(route)
@@ -180,9 +204,11 @@ export function Controls({
     return (
       <div className="stack">
         <Panel title={t("Integration events", "Event integrasi")}>
+          <BulkActions selection={bulk} actions={[{ id: "retry", label: t("Retry selected events", "Coba ulang event terpilih"), description: t("Schedules the original events again. WMS stock is not reposted.", "Menjadwalkan ulang event asal. Stok WMS tidak dicatat ulang."), perform: async row => bulkCommand("erp-retry", { event: row.id }), after: afterBulk }]} />
           <DataTable
             label={t("ERP events", "Event ERP")}
             rows={events}
+            selection={bulk}
             empty={t(
               "No integration events in this warehouse.",
               "Belum ada event integrasi di gudang ini.",
@@ -192,6 +218,7 @@ export function Controls({
             columns={[
               { key: "id", label: t("Event ID", "ID event") },
               { key: "source", label: t("WMS transaction", "Transaksi WMS") },
+              { key: "createdAt", label: t("Recorded at", "Waktu pencatatan"), render: r => <TableTimestamp value={r.createdAt} /> },
               {
                 key: "wms",
                 label: t("WMS status", "Status WMS"),
@@ -217,6 +244,8 @@ export function Controls({
             <Summary
               items={[
                 [t("Event ID (fixed)", "ID event (tetap)"), event.id],
+                [t("Recorded at", "Waktu pencatatan"), ts(event.createdAt)],
+                [t("Next scheduled attempt", "Jadwal percobaan berikutnya"), event.transport === "acknowledged" ? t("Completed", "Selesai") : ts(event.nextAttemptAt)],
                 [t("Source", "Sumber"), event.source],
                 [
                   t("WMS", "WMS"),
@@ -272,6 +301,7 @@ export function Controls({
   if (route === "movements")
     return (
       <Panel title={t("Item stock ledger", "Kartu stok barang")}>
+        <p className="muted">{t("Report period", "Periode laporan")}: {fromDate ? date(fromDate) : t("Beginning", "Awal")} – {toDate ? date(toDate) : t("Latest", "Terbaru")} · {zone}. {t("Export includes its generation time in UTC.", "Ekspor menyertakan waktu pembuatan dalam UTC.")}</p>
         <div className="filter-bar">
           {itemSelect}
           <Field label={t("Location", "Lokasi")}>
@@ -302,14 +332,14 @@ export function Controls({
             type="search"
           />
           <Field
-            label={t("From date (UTC+7)", "Dari tanggal (UTC+7)")}
+            label={t(`From date (${zone})`, `Dari tanggal (${zone})`)}
             type="date"
             value={fromDate}
             max={toDate || undefined}
             onChange={(e) => setFromDate(e.target.value)}
           />
           <Field
-            label={t("To date (UTC+7)", "Sampai tanggal (UTC+7)")}
+            label={t(`To date (${zone})`, `Sampai tanggal (${zone})`)}
             type="date"
             value={toDate}
             min={fromDate || undefined}
@@ -353,10 +383,11 @@ export function Controls({
             },
             {
               key: "posted",
-              label: t("Posted at (UTC+7)", "Dicatat (UTC+7)"),
-              render: (r) => ts(r.posted),
+              label: t("Posted at", "Waktu pencatatan"),
+              render: (r) => <TableTimestamp value={r.posted} />,
             },
             { key: "user", label: t("User", "Pengguna") },
+            { key: "occurred", label: t("Occurred at", "Waktu kejadian"), render: r => <TableTimestamp value={r.occurred} /> },
           ]}
         />
         {data.ledgerPage && <div className="form-actions">
@@ -427,9 +458,15 @@ export function Controls({
             "Offline berarti belum dikirim. Hasil belum jelas berarti server mungkin sudah mencatatnya. Retry mempertahankan ID dan isi asal.",
           )}
         </Notice>
+        <BulkActions selection={bulk} actions={[
+          { id: "send", label: t("Send selected unsent requests", "Kirim permintaan belum terkirim"), allowed: row => row.status === "offline", description: t("Uses each original request ID, payload and version. Requests are sent in order.", "Memakai ID, isi, dan versi permintaan asal. Permintaan dikirim berurutan."), perform: async row => recoverRequest(row.id, "send"), after: afterBulk },
+          { id: "check", label: t("Check selected unknown requests", "Periksa hasil yang belum jelas"), allowed: row => row.status === "unknown", description: t("Checks the original requests before any resend. No new request ID is created.", "Memeriksa permintaan asal sebelum pengiriman ulang. Tidak membuat ID permintaan baru."), perform: async row => recoverRequest(row.id, "check"), after: afterBulk },
+          { id: "retry-original", label: t("Retry selected original requests", "Coba ulang permintaan asal terpilih"), allowed: row => row.status === "unknown", description: t("Explicitly resends the original request with the same ID, payload and version. The original identity prevents recording the same transaction twice.", "Mengirim ulang permintaan asal dengan ID, isi, dan versi yang sama. Identitas asal mencegah transaksi yang sama dicatat dua kali."), perform: async row => recoverRequest(row.id, "retry"), after: afterBulk },
+        ]} />
         <DataTable
           label={t("Pending requests", "Permintaan tertunda")}
           rows={rows}
+          selection={bulk}
           empty={t(
             "No pending requests for this user and warehouse.",
             "Tidak ada permintaan tertunda untuk pengguna dan gudang ini.",
@@ -443,7 +480,7 @@ export function Controls({
                   className="text-button break-word"
                   onClick={() => setModal(r)}
                 >
-                  {r.id}
+                  <Reference value={r.id} />
                 </button>
               ),
             },
@@ -466,7 +503,7 @@ export function Controls({
             {
               key: "created",
               label: t("Captured", "Ditangkap"),
-              render: (r) => ts(r.created),
+              render: (r) => <TableTimestamp value={r.created} />,
             },
             {
               key: "action",
@@ -492,6 +529,9 @@ export function Controls({
                 [t("Owner", "Pemilik"), modal.request.user],
                 [t("Warehouse", "Gudang"), modal.request.warehouse],
                 [t("Type", "Jenis"), modal.request.type],
+                [t("Captured on device", "Dicatat di perangkat"), ts(modal.created)],
+                [t("Occurred at", "Waktu kejadian"), ts(modal.request.occurredAt)],
+                [t("Server confirmed", "Dikonfirmasi server"), t("Not confirmed yet", "Belum dikonfirmasi")],
               ]}
             />
             <pre>{JSON.stringify(modal.request.payload, null, 2)}</pre>
@@ -546,6 +586,11 @@ export function Controls({
         <Notice kind={data.erpDelivery?.enabled && !data.erpDelivery?.paused ? "info" : "warning"}>
           {data.erpDelivery?.enabled ? data.erpDelivery?.paused ? t("ERP delivery is held. Complete reconciliation before releasing the outbox.", "Pengiriman ERP ditahan. Selesaikan rekonsiliasi sebelum melepas outbox.") : t("ERP delivery is enabled. Monitor pending business results below.", "Pengiriman ERP aktif. Pantau hasil bisnis tertunda di bawah.") : t("ERP delivery is disabled. WMS events remain queued.", "Pengiriman ERP nonaktif. Event WMS tetap dalam antrean.")}
         </Notice>
+        <Panel title={t("Activity period", "Periode aktivitas")}>
+          {periodFields}
+          <Summary items={[[t("Confirmed actions in period", "Tindakan tercatat pada periode"), data.activity?.confirmedActions ?? t("Loading", "Memuat")]]} />
+          <p className="muted">{t("The period applies to confirmed activity. Open cases below show the current state.", "Periode berlaku untuk aktivitas tercatat. Kasus terbuka di bawah menampilkan kondisi saat ini.")}</p>
+        </Panel>
         <Panel title={t("Open operational cases", "Kasus operasional terbuka")}>
           <DataTable
             label={t("Operational queues", "Antrean operasional")}
@@ -575,7 +620,7 @@ export function Controls({
             items={[
               [
                 t("Backup evidence", "Bukti backup"),
-                data.backupEvidence?.completedAt ? new Date(data.backupEvidence.completedAt).toLocaleString() : t("Not available", "Belum tersedia"),
+                data.backupEvidence?.completedAt ? ts(data.backupEvidence.completedAt) : t("Not available", "Belum tersedia"),
               ],
               [
                 t("Restore drill", "Latihan restore"),
@@ -636,13 +681,16 @@ export function Controls({
               {t("Record follow-up", "Catat tindak lanjut")}
             </Button>
           </form>
-          {(data.followups || [])
-            .filter((n) => n.warehouse === warehouse)
-            .map((n, i) => (
-              <p key={i}>
-                <strong>{n.user}</strong> · {n.note}
-              </p>
-            ))}
+          <DataTable label={t("Recorded follow-ups", "Tindak lanjut tercatat")} rows={(data.followups || []).filter(n => n.warehouse === warehouse)}
+            columns={[{ key: "user", label: t("User", "Pengguna") }, { key: "note", label: t("Note", "Catatan") }, { key: "stamp", label: t("Recorded at", "Waktu pencatatan"), render: row => <TableTimestamp value={row.stamp} /> }]}
+            empty={t("No follow-ups recorded.", "Belum ada tindak lanjut tercatat.")} />
+          {supportingPaging && (
+            <nav className="catalogue-pagination" aria-label={t("Follow-up pages", "Halaman tindak lanjut")} aria-busy={loadingSupporting}>
+              <span role="status">{loadingSupporting ? t("Loading follow-ups…", "Memuat tindak lanjut…") : t(`Page ${supportingPaging.page} of ${supportingPaging.pages} · ${supportingPaging.total} follow-ups`, `Halaman ${supportingPaging.page} dari ${supportingPaging.pages} · ${supportingPaging.total} tindak lanjut`)}</span>
+              <Button disabled={loadingSupporting || supportingPaging.page <= 1} onClick={() => setSupportingPage(supportingPaging.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button>
+              <Button disabled={loadingSupporting || supportingPaging.page >= supportingPaging.pages} onClick={() => setSupportingPage(supportingPaging.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button>
+            </nav>
+          )}
         </Panel>
         {modal && (
           <Modal
@@ -768,10 +816,11 @@ export function Controls({
                 { key: "kind", label: t("Posted event", "Kejadian tercatat") },
                 { key: "location", label: t("Location", "Lokasi") },
                 { key: "source", label: t("Source", "Sumber") },
+                { key: "occurred", label: t("Occurred at", "Waktu kejadian"), render: row => <TableTimestamp value={row.occurred} /> },
                 {
                   key: "posted",
                   label: t("Posted at", "Dicatat pada"),
-                  render: (r) => ts(r.posted),
+                  render: (r) => <TableTimestamp value={r.posted} />,
                 },
               ]}
             />
@@ -800,6 +849,11 @@ export function Controls({
           onChange={setTab}
         />
         {tab === "labels" ? (
+          <div className="stack">
+            <Field label={t("Find items for labels", "Cari barang untuk label")} type="search" value={query} onChange={e => { setQuery(e.target.value); setLabelPage(1); }} />
+            <BulkActions selection={bulk} actions={[{ id: "labels", label: t("Download selected labels", "Unduh label terpilih"), description: t("Creates one printable sheet with one label per selected item. No physical printer is connected.", "Membuat satu lembar siap cetak dengan satu label per barang terpilih. Printer fisik belum terhubung."), perform: async row => editRecord("labelHistory", { sku: row.sku, version: row.version, code: row.barcode, action: "download" }), complete: rows => downloadLabelSheet(rows, locale), after: afterBulk }]} />
+            <div className="bulk-label-table" role="region" tabIndex={0} aria-label={t("Items for label output", "Barang untuk pembuatan label")}><DataTable label={t("Select items for labels", "Pilih barang untuk label")} rows={labelCatalogue.rows} selection={bulk} onSelect={row => setSku(row.sku)} selected={sku} columns={[{ key: "sku", label: "SKU" }, { key: "name", label: t("Item", "Barang") }, { key: "barcode", label: "Barcode" }]} /></div>
+            <div className="catalogue-pagination"><Button disabled={bulk.busy || labelPaging.page <= 1 || !!setCatalogueQuery && !server} onClick={() => setLabelPage(labelPaging.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button><span>{t(`Page ${labelPaging.page} of ${labelPaging.pages} · ${labelPaging.total} items`, `Halaman ${labelPaging.page} dari ${labelPaging.pages} · ${labelPaging.total} barang`)}</span><Button disabled={bulk.busy || labelPaging.page >= labelPaging.pages || !!setCatalogueQuery && !server} onClick={() => setLabelPage(labelPaging.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button></div>
           <div className="settings-grid">
             <div className="stack">
               {itemSelect}
@@ -866,6 +920,7 @@ export function Controls({
               name={`${product.name} · ${sku}`}
               labelRef={labelRef}
             />
+          </div>
           </div>
         ) : tab === "packaging" ? (
           <>
@@ -1180,8 +1235,10 @@ export function Controls({
             [t("Unresolved", "Belum selesai"), unresolved.length],
           ]}
         />
+        <BulkActions selection={bulk} actions={[{ id: "exclude", label: t("Exclude selected observations", "Kecualikan pengamatan terpilih"), reason: true, description: t("Excludes observations from this simulation only. No stock is confirmed or changed.", "Mengecualikan pengamatan pada simulasi ini saja. Tidak mengonfirmasi atau mengubah stok."), perform: async (row, reason) => { setExcluded(current => ({ ...current, [row.code]: reason })); } }]} />
         <DataTable
           label={t("Unique read observations", "Pengamatan baca unik")}
+          selection={bulk}
           rows={unique.map((code) => ({ id: code, code }))}
           empty={t(
             "Start capture and simulate a reader batch.",

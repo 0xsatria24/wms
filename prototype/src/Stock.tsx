@@ -13,10 +13,14 @@ import {
   CaretLeft,
 } from "@phosphor-icons/react";
 import { ShipmentTrends } from "./ShipmentTrends";
+import { TableTimestamp } from "./DateTime";
 import { available } from "./fixtures";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { stockItemPage } from "./stock-items";
 import { useServerCatalogue } from "./server-catalogue";
+import { SelectionCell, SelectionHeader, useBulkSelection } from "./selection";
+import { BulkActions } from "./BulkActions";
+import { downloadCsv } from "./bulk-files";
 import {
   Button,
   Field,
@@ -30,9 +34,10 @@ import {
   Summary,
   Modal,
   useText,
+  useCataloguePageSize,
 } from "./ui.tsx";
 
-const stockColumnWidths = [26, 12, 13, 15, 12, 12, 10];
+const stockColumnWidths = [23, 11, 9, 14, 10, 11, 7, 15];
 
 export function Stock({
   data,
@@ -53,7 +58,7 @@ export function Stock({
   const [condition, setCondition] = useState("");
   const [stockStatus, setStockStatus] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useCataloguePageSize();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [sort, setSort] = useState("item");
   const [descending, setDescending] = useState(false);
@@ -99,6 +104,7 @@ export function Stock({
     ],
   );
   const result = server ? { ...localResult, ...server, items: localResult.items } : localResult;
+  const bulk = useBulkSelection({ rows: result.items, scope: JSON.stringify([user.id, user.role, warehouse, search, loc, condition, stockStatus, sort, descending, page, pageSize]), key: row => row.key, label: row => `${row.product.name} · ${row.sku}`, disabled: !!setCatalogueQuery && !server });
   useEffect(
     () => setPage(1),
     [
@@ -285,8 +291,8 @@ export function Stock({
               <h2>{t("Stock by item", "Stok per barang")}</h2>
               <p id="stock-selection-scope" className="muted">
                 {t(
-                  "Select an item to view its details across all locations.",
-                  "Pilih barang untuk melihat detailnya di semua lokasi.",
+                  "Open an item name for details across all locations. Use checkboxes to select items for export.",
+                  "Klik nama barang untuk detail di semua lokasi. Centang kotak untuk memilih barang yang akan diekspor.",
                 )}
               </p>
             </div>
@@ -338,6 +344,7 @@ export function Stock({
               </select>
             </Field>
           </div>
+          <BulkActions selection={bulk} actions={[{ id: "export", label: t("Export selected stock", "Ekspor stok terpilih"), description: t("Exports only the matching positions of the selected SKUs, with locations, restrictions and units kept separate.", "Mengekspor hanya posisi yang sesuai filter dari SKU terpilih, dengan lokasi, pembatasan, dan satuan tetap terpisah."), perform: async () => {}, complete: rows => downloadCsv("selected-stock.csv", [["Warehouse", "SKU", "Item", "Location", "Condition", "Hold", "Frozen", "Pickable", "On hand", "Reserved", "Available", "Unit", "Last movement"], ...rows.flatMap(group => group.rows.map(position => [warehouse, group.sku, group.product.name, position.location, position.condition, position.hold || "", !!position.frozen, position.pickable ?? /^A-/.test(position.location), position.qty, position.reserved, available(position), position.unit || group.product.unit || "units", position.lastMovementAt || ""]))]) }]} />
           <div
             className="stock-group-scroll"
             role="region"
@@ -353,12 +360,14 @@ export function Stock({
               aria-describedby="stock-selection-scope stock-filter-scope"
             >
               <colgroup>
+                <col style={{ width: 48 }} />
                 {stockColumnWidths.map((width, index) => (
                   <col key={index} style={{ width: `${width}%` }} />
                 ))}
               </colgroup>
               <thead>
                 <tr>
+                  <SelectionHeader selection={bulk} label={t("Select all on this page", "Pilih semua di halaman ini")} />
                   {[
                     ["item", t("Item", "Barang")],
                     ["location", t("Location", "Lokasi")],
@@ -367,6 +376,7 @@ export function Stock({
                     ["reserved", t("Reserved", "Dipesan")],
                     ["available", t("Available", "Tersedia")],
                     ["unit", t("Unit", "Satuan")],
+                    ["lastMovementAt", t("Last movement", "Mutasi terakhir")],
                   ].map(([key, label]) => (
                     <th
                       key={key}
@@ -428,7 +438,8 @@ export function Stock({
                   const single = group.rows[0];
                   return (
                     <React.Fragment key={group.key}>
-                      <tr className={selected === group.sku ? "selected" : ""}>
+                      <tr className={[selected === group.sku ? "selected" : "", bulk.checked(group) ? "bulk-selected" : ""].filter(Boolean).join(" ")}>
+                        <SelectionCell selection={bulk} row={group} label={t(`Select ${bulk.label(group)}`, `Pilih ${bulk.label(group)}`)} />
                         <td>
                           <div className="stock-item-cell">
                             {multiple ? (
@@ -541,6 +552,7 @@ export function Stock({
                             ? unitLabel(group.totals[0].unit)
                             : t("Mixed units", "Satuan berbeda")}
                         </td>
+                        <td className="timestamp-column"><TableTimestamp value={group.lastMovementAt} /></td>
                       </tr>
                       {multiple && (
                         <tr
@@ -548,8 +560,8 @@ export function Stock({
                           hidden={!isOpen}
                           id={detailId}
                         >
-                          <td />
-                          <td colSpan={6}>
+                          <td colSpan={2} />
+                          <td colSpan={7}>
                             {isOpen && (
                               <div className="stock-position-subview">
                                 <table
@@ -573,6 +585,7 @@ export function Stock({
                                         t("Reserved", "Dipesan"),
                                         t("Available", "Tersedia"),
                                         t("Unit", "Satuan"),
+                                        t("Last movement", "Mutasi terakhir"),
                                       ].map((label, index) => (
                                         <th
                                           key={index}
@@ -609,6 +622,7 @@ export function Stock({
                                               "units",
                                           )}
                                         </td>
+                                        <td className="timestamp-column"><TableTimestamp value={position.lastMovementAt} /></td>
                                       </tr>
                                     ))}
                                   </tbody>

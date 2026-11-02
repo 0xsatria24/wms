@@ -35,7 +35,7 @@ public sealed partial class CommandProcessor
         switch (command.Type)
         {
             case "approve-order":
-                Supervisor(actor);
+                Reviewer(approvalSettings.OrderReview);
                 Require(order.Creator != actor.Id && order.Status == "pending-approval", "approval", 403);
                 order.Status = "approved";
                 break;
@@ -45,7 +45,7 @@ public sealed partial class CommandProcessor
                 order.Status = "released";
                 break;
             case "reject-order":
-                Supervisor(actor);
+                Reviewer(approvalSettings.OrderReview);
                 Require(order.Creator != actor.Id && order.Status == "pending-approval", "approval", 403);
                 Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
                 order.Status = "rejected";

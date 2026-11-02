@@ -89,6 +89,14 @@ public sealed class StockPosition
 }
 public sealed class OperationalDocument
 {
+    public DateOnly? DocumentDate { get; set; }
+    public DateOnly? ScheduledDate { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? SubmittedAt { get; set; }
+    public DateTimeOffset? ApprovedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
     public string Id { get; set; } = "";
     public string CompanyId { get; set; } = "demo";
     public string Kind { get; set; } = "";

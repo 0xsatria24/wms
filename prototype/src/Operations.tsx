@@ -1,9 +1,12 @@
 import React, { useState } from "react";
+import { Reference } from "./Reference";
+import { DocumentDates, TableTimestamp, useDateTime } from "./DateTime";
 import { Barcode, ArrowRight, Plus } from "@phosphor-icons/react";
 import { MAIN, SECONDARY, available } from "./fixtures";
 import { WorkQueue } from "./WorkQueue";
 import { productSuggestions } from "./autocomplete-model";
 import { useServerCatalogue } from "./server-catalogue";
+import { canOrderAction } from "./bulk-model";
 import { selectDraftDocument, captureDocumentDraft } from "./work-queue-model";
 import {
   useText,
@@ -37,6 +40,7 @@ export function Operations(props) {
   const documentField = ["receiving", "transfers"].includes(route) ? "document" : ["quality", "putaway", "count"].includes(route) || route === "cancellation" && d.mode && d.mode !== "cancel" ? "task" : "order";
   const patch = (changes) => applyDraft(captureDocumentDraft(d, changes, documentField, activeDocumentId));
   const t = useText();
+  const { date } = useDateTime();
   useServerCatalogue(data, ["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) ? undefined : props.setCatalogueQuery, { view: route, focusSku: d.newOrderSku || d.sku || "", focusDocument: d[documentField] || "", page: props.catalogueQuery?.page || 1, pageSize: 25 });
   const storageLocations = (data.locationMaster || []).filter((location) => (location.pickable ?? /^A-/.test(location.name)) && !location.frozen).map((location) => location.name);
   const operationSku = d.sku || data.products.find((product) => product.active)?.sku || "";
@@ -180,9 +184,16 @@ export function Operations(props) {
       setCatalogueQuery={props.setCatalogueQuery}
       focusDocument={d[documentField] || ""}
       lookupSku={d.newOrderSku || d.sku || ""}
+      bulkScope={JSON.stringify([user.id, user.role, warehouse, data.approvalPolicy?.orderReview])}
+      bulkActions={route === "orders" && props.bulkCommand && props.editRecord ? [
+        ["submit-order", t("Submit selected orders", "Ajukan order terpilih")],
+        ["approve-order", t("Approve selected orders", "Setujui order terpilih")],
+        ["reject-order", t("Return selected for review", "Kembalikan terpilih untuk ditinjau")],
+        ["release-order", t("Release selected orders", "Lepas order terpilih")],
+      ].map(([action, label]) => ({ id: action, label, reason: action === "reject-order", danger: action === "reject-order", allowed: row => canOrderAction(action, row, user, data.approvalPolicy?.orderReview), description: t("Approval and release are separate. This action does not reserve or move stock.", "Persetujuan dan pelepasan terpisah. Tindakan ini tidak memesan atau memindahkan stok."), perform: async (row, reason) => action === "submit-order" ? props.editRecord("submit-order", { id: row.id, version: row.version }) : props.bulkCommand(action, { order: row.id, ...(reason ? { reason } : {}) }, row.version), after: async () => { await props.refresh?.(); } })) : undefined}
       selected={selected}
       onSelect={onSelect}
-      detail={detail}
+      detail={detail && <>{detail}<DocumentDates row={items.find(row => row.id === selected)} warehouse={warehouse} user={user} onSaved={props.refresh} /></>}
       title={
         title ||
         {
@@ -213,7 +224,7 @@ export function Operations(props) {
           {
             key: "stamp",
             label: t("Time", "Waktu"),
-            render: (r) => new Date(r.stamp).toLocaleString(),
+            render: (r) => <TableTimestamp value={r.stamp} />,
           },
         ]}
         rows={data.audit
@@ -886,12 +897,13 @@ export function Operations(props) {
                       )}
                     </Notice>
                     {reasonField(o.status === "pending-approval")}
+                    {o.status === "pending-approval" && data.approvalPolicy?.orderReview === "admin" && user.role !== "admin" && <Notice>{t("This warehouse requires an administrator to review orders.", "Gudang ini mewajibkan admin untuk meninjau order.")}</Notice>}
                     <div className="form-actions">
                       {o.status === "pending-approval" && (
                         <Button
                           danger
                           disabled={
-                            user.role === "operator" || o.creator === user.id
+                            user.role === "operator" || o.creator === user.id || (data.approvalPolicy?.orderReview === "admin" && user.role !== "admin")
                           }
                           onClick={() => {
                             if (!String(value("reason")).trim()) {
@@ -917,7 +929,7 @@ export function Operations(props) {
                         disabled={
                           user.role === "operator" ||
                           (o.status === "pending-approval" &&
-                            o.creator === user.id)
+                            (o.creator === user.id || (data.approvalPolicy?.orderReview === "admin" && user.role !== "admin")))
                         }
                         onClick={() =>
                           review(
@@ -997,6 +1009,8 @@ export function Operations(props) {
                         returned: 0,
                         allocations: {},
                         cancelled: false,
+                        documentDate: d.newOrderDate || "",
+                        scheduledDate: d.newOrderSchedule || "",
                       },
                     ],
                   }));
@@ -1009,7 +1023,7 @@ export function Operations(props) {
                     );
                     return;
                   }
-                  patch({ order: id, newOrderSku: "", newOrderQty: "" });
+                  patch({ order: id, newOrderSku: "", newOrderQty: "", newOrderDate: "", newOrderSchedule: "" });
                   setNewOrder(false);
                 } catch {
                   setNewOrderError(
@@ -1036,6 +1050,8 @@ export function Operations(props) {
                   )}
                 />
               </Field>
+              <Field label={t("Document date (blank uses today's warehouse date)", "Tanggal dokumen (kosong memakai tanggal gudang hari ini)")} type="date" value={d.newOrderDate || ""} disabled={creatingOrder} onChange={e => patch({ newOrderDate: e.target.value })} />
+              <Field label={t("Scheduled shipment date", "Rencana tanggal kirim")} type="date" value={d.newOrderSchedule || ""} disabled={creatingOrder} onChange={e => patch({ newOrderSchedule: e.target.value })} />
               {newOrderError && <Notice kind="error">{newOrderError}</Notice>}
               {newProduct && (
                 <Summary
@@ -1236,6 +1252,15 @@ export function Operations(props) {
             patch({ mode, document: undefined, qty: undefined, scan: "", locationScan: "" })
           }
         />
+        <div className="work-queue-table operational-date-table" role="region" tabIndex={0} aria-label={t("Transfer documents", "Dokumen transfer")}><DataTable label={t("Transfer documents", "Dokumen transfer")} rows={docs} selected={doc?.id}
+          onSelect={mode === "receive" ? row => patch({ document: row.id, qty: undefined, scan: "", locationScan: "" }) : undefined}
+          columns={[
+            { key: "id", label: t("Document", "Dokumen") },
+            { key: "from", label: t("From", "Dari") }, { key: "to", label: t("To", "Ke") },
+            { key: "scheduledDate", label: t("Planned arrival", "Rencana tiba"), render: row => date(row.scheduledDate) },
+            { key: "updatedAt", label: t("Last updated", "Terakhir diubah"), render: row => <TableTimestamp value={row.updatedAt} /> },
+            { key: "completedAt", label: t("Received in full", "Diterima seluruhnya"), render: row => <TableTimestamp value={row.completedAt} /> },
+          ]} empty={t("No transfer documents in this view.", "Belum ada dokumen transfer pada tampilan ini.")} /></div>
         {mode === "receive" ? (
           !doc ? (
             <Empty
@@ -1434,6 +1459,7 @@ export function Operations(props) {
             { key: "id", label: t("Transaction", "Transaksi") },
             { key: "source", label: t("Source", "Sumber") },
             { key: "sku", label: t("Item", "Barang") },
+            { key: "createdAt", label: t("Recorded at", "Waktu pencatatan"), render: row => <TableTimestamp value={row.createdAt} /> },
             {
               key: "qty",
               label: t("Actual (units)", "Aktual (unit)"),
@@ -1462,6 +1488,19 @@ export function Operations(props) {
             onChange={(view) => patch({ view })}
           />
         )}
+        <div className="work-queue-table operational-date-table" role="region" tabIndex={0} aria-label={t("Count tasks", "Tugas opname")}><DataTable label={t("Count tasks", "Tugas opname")} rows={scoped(data.counts)} selected={task?.id}
+          onSelect={row => patch({ task: row.id, qty: undefined, reason: "" })}
+          columns={[
+            { key: "id", label: t("Task", "Tugas"), render: row => <span className="table-document-id" title={row.id}><Reference value={row.id} /></span> },
+            { key: "sku", label: t("Item / SKU", "Barang / SKU") },
+            { key: "location", label: t("Location", "Lokasi") },
+            { key: "status", label: t("Status", "Status") },
+            { key: "scheduledDate", label: t("Planned count", "Rencana hitung"), render: row => date(row.scheduledDate) },
+            { key: "startedAt", label: t("Started", "Dimulai"), render: row => <TableTimestamp value={row.startedAt} /> },
+            { key: "submittedAt", label: t("Submitted", "Diajukan"), render: row => <TableTimestamp value={row.submittedAt} /> },
+            { key: "approvedAt", label: t("Approved", "Disetujui"), render: row => <TableTimestamp value={row.approvedAt} /> },
+            { key: "completedAt", label: t("Closed", "Ditutup"), render: row => <TableTimestamp value={row.completedAt} /> },
+          ]} empty={t("No count tasks in this warehouse.", "Belum ada tugas opname di gudang ini.")} /></div>
         {!task ? (
           <>
             <Empty
@@ -1534,6 +1573,7 @@ export function Operations(props) {
                 />
                 {task.status === "review" && (
                   <>
+                    {data.approvalPolicy?.countReview === "admin" && user.role !== "admin" && <Notice>{t("This warehouse requires an administrator to approve count adjustments.", "Gudang ini mewajibkan admin untuk menyetujui penyesuaian opname.")}</Notice>}
                     {reasonField(true)}
                     <div className="form-actions">
                       <Button
@@ -1554,7 +1594,7 @@ export function Operations(props) {
                       </Button>
                       <Button
                         primary
-                        disabled={task.counter === user.id}
+                        disabled={task.counter === user.id || (data.approvalPolicy?.countReview === "admin" && user.role !== "admin")}
                         onClick={() =>
                           review(
                             "adjust-count",
@@ -1646,6 +1686,7 @@ export function Operations(props) {
         <Button onClick={() => applyDraft({ [documentField]: undefined, qty: undefined, good: undefined, bad: undefined, scan: "", locationScan: "", reason: "" })}>{t("Clear unavailable document draft", "Hapus draf dokumen yang tidak tersedia")}</Button>
       </Notice>}
       {content}
+      {!["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) && <DocumentDates row={[...data.counts, ...data.transfers, ...data.returns, ...data.orders, ...data.returnTasks].find(row => row.id === activeDocumentId)} warehouse={warehouse} user={user} onSaved={props.refresh} />}
       {!["orders", "count", "returns", "transfers", "cancellation"].includes(
         route,
       ) && history}

@@ -20,9 +20,9 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],
     proxy: {
-      "/api": { target: "http://127.0.0.1:5080" },
-      "/auth": { target: "http://127.0.0.1:5080" },
-      "/hubs": { target: "http://127.0.0.1:5080", ws: true },
+      "/api": { target: "http://127.0.0.1:5080", changeOrigin: true },
+      "/auth": { target: "http://127.0.0.1:5080", changeOrigin: true },
+      "/hubs": { target: "http://127.0.0.1:5080", changeOrigin: true, ws: true },
     },
     warmup: {
       clientFiles: ["./src/main.tsx"],

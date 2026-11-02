@@ -4,7 +4,7 @@ using Wms.Shared;
 
 namespace Wms.Modules.Reporting;
 
-public sealed record WorkspaceQuery(string View = "overview", int Page = 1, int PageSize = 25, string Query = "", string Status = "", string Category = "", string Sku = "", string Location = "", string Condition = "", string Sort = "", bool Descending = false, string FocusSku = "", string FocusDocument = "", string From = "", string To = "", string RequestKey = "");
+public sealed record WorkspaceQuery(string View = "overview", int Page = 1, int PageSize = 25, string Query = "", string Status = "", string Category = "", string Sku = "", string Location = "", string Condition = "", string Sort = "", bool Descending = false, string FocusSku = "", string FocusDocument = "", string From = "", string To = "", string RequestKey = "", int UsersPage = 1, int SupportingPage = 1);
 
 public sealed class WorkspaceWindow
 {
@@ -17,6 +17,9 @@ public sealed class WorkspaceWindow
         Rules.Require(input.Query.Length <= 200 && input.RequestKey.Length <= 3000 && input.FocusSku.Length <= 200 && input.FocusDocument.Length <= 200, "required", 400);
         var size = Math.Clamp(input.PageSize, 1, 50);
         var search = input.Query.Trim().ToLowerInvariant();
+        var from = WarehouseDates.Date(input.From);
+        var to = WarehouseDates.Date(input.To);
+        Rules.Require(!from.HasValue || !to.HasValue || from <= to, "required", 400);
         var items = db.Items.Where(i => i.CompanyId == "demo");
         var positions = db.Positions.Where(p => p.CompanyId == "demo" && p.OnHand > 0 && db.Locations.Any(l => l.Id == p.LocationId && l.WarehouseId == actor.WarehouseId));
         if (actor.Role == "operator")
@@ -87,6 +90,8 @@ public sealed class WorkspaceWindow
             scopeTotal = await projections.CountAsync(ct);
             statuses = await projections.Select(x => x.Status).Distinct().OrderBy(s => s).ToArrayAsync(ct);
             var filtered = projections.Where(x => (search == "" || (x.Document.Id + " " + x.Document.Source + " " + x.Item.Sku + " " + x.Item.Name).ToLower().Contains(search)) && (input.Sku == "" || x.Item.Sku == input.Sku) && (input.Status == "" || x.Status == input.Status));
+            if (from.HasValue) filtered = filtered.Where(x => x.Document.DocumentDate >= from.Value);
+            if (to.HasValue) filtered = filtered.Where(x => x.Document.DocumentDate <= to.Value);
             total = await filtered.CountAsync(ct);
             var page = Math.Clamp(input.Page, 1, Math.Max(1, (int)Math.Ceiling(total / (double)size)));
             var sorted = filtered.OrderBy(x => x.Document.Id);

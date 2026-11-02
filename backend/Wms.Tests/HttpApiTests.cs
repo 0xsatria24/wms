@@ -14,7 +14,7 @@ using Xunit;
 namespace Wms.Tests;
 
 [Collection("PostgreSQL")]
-public sealed class HttpApiTests(PostgresFixture postgres)
+public sealed partial class HttpApiTests(PostgresFixture postgres)
 {
     private const string Warehouse = "Main Warehouse";
     private const string SnapshotPath = "/api/workspaces/Main%20Warehouse/snapshot";
@@ -438,6 +438,139 @@ public sealed class HttpApiTests(PostgresFixture postgres)
         })).StatusCode);
         var snapshot = await Read(await client.GetAsync(SnapshotPath));
         Assert.DoesNotContain(snapshot.GetProperty("audit").EnumerateArray(), row => row.GetProperty("type").GetString() is "create-user" or "delete-user");
+    }
+
+    [Fact]
+    public async Task PublicEnrollmentStopsAtQuotaAndDoesNotGrowDirectory()
+    {
+        await using var factory = await Factory();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WmsDb>();
+            db.Principals.AddRange(Enumerable.Range(0, 100).Select(i => new Principal { Id = $"pending-{i}", Subject = $"request:{i}", Issuer = "access-request", Email = $"pending{i}@example.test", Name = "Pending" }));
+            await db.SaveChangesAsync();
+        }
+        using var client = factory.CreateClient();
+        await Token(client);
+        var response = await client.PostAsJsonAsync("/api/access/request", new { name = "Extra", email = "extra@example.test" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        using var verify = factory.Services.CreateScope();
+        Assert.False(await verify.ServiceProvider.GetRequiredService<WmsDb>().Principals.AnyAsync(p => p.Email == "extra@example.test"));
+    }
+
+    [Fact]
+    public async Task PublicEnrollmentHasABoundedGlobalRequestRate()
+    {
+        await using var factory = await Factory();
+        using var client = factory.CreateClient();
+        await Token(client);
+        var replies = new List<HttpResponseMessage>();
+        for (var i = 0; i < 12; i++)
+            replies.Add(await client.PostAsJsonAsync("/api/access/request", new { name = "Applicant", email = "same@example.test" }));
+        Assert.Contains(replies, r => r.StatusCode == HttpStatusCode.Accepted);
+        Assert.Contains(replies, r => r.StatusCode == HttpStatusCode.TooManyRequests && r.Headers.RetryAfter is not null);
+    }
+
+    [Fact]
+    public async Task SupportingRecordsRejectOversizeAndDeriveActorMetadata()
+    {
+        await using var factory = await Factory();
+        using var client = await Login(factory, "operator");
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(client, "followups", new { note = new string('x', 20000) })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Edit(client, "followups", new { note = "Check receipt", user = "admin", warehouse = "other", stamp = "fake" })).StatusCode);
+        var snapshot = await Read(await client.GetAsync(SnapshotPath));
+        var note = Assert.Single(snapshot.GetProperty("followups").EnumerateArray());
+        Assert.Equal("operator", note.GetProperty("user").GetString());
+        Assert.Equal(Warehouse, note.GetProperty("warehouse").GetString());
+        Assert.NotEqual("fake", note.GetProperty("stamp").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(client, "followups", new { note = "Valid", extra = new { nested = "not allowed" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(client, "labelHistory", new { sku = "SKU-A", action = "replace", code = "fake" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Edit(client, "labelHistory", new { sku = "SKU-A", action = "download", code = "fake", user = "admin" })).StatusCode);
+        var after = await Read(await client.GetAsync(SnapshotPath));
+        var label = Assert.Single(after.GetProperty("labelHistory").EnumerateArray());
+        Assert.Equal("operator", label.GetProperty("user").GetString());
+        Assert.NotEqual("fake", label.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task PublicEnrollmentQuotaIsAtomicAcrossHosts()
+    {
+        var options = await postgres.Database();
+        string connection;
+        await using (var db = new WmsDb(options))
+        {
+            connection = db.Database.GetConnectionString()!;
+            var pending = await db.Principals.CountAsync(p => p.Status == "pending");
+            db.Principals.AddRange(Enumerable.Range(0, 99 - pending).Select(i => new Principal { Id = $"quota-{i}", Subject = $"quota:{i}", Issuer = "access-request", Email = $"quota{i}@example.test", Name = "Pending" }));
+            await db.SaveChangesAsync();
+        }
+        await using var hostA = new ApiFactory(connection);
+        await using var hostB = new ApiFactory(connection);
+        using var a = hostA.CreateClient();
+        using var b = hostB.CreateClient();
+        await Token(a);
+        await Token(b);
+        var replies = await Task.WhenAll(a.PostAsJsonAsync("/api/access/request", new { name = "A", email = "a-new@example.test" }), b.PostAsJsonAsync("/api/access/request", new { name = "B", email = "b-new@example.test" }));
+        Assert.Single(replies, r => r.StatusCode == HttpStatusCode.Accepted);
+        Assert.Single(replies, r => r.StatusCode == HttpStatusCode.TooManyRequests);
+        await using var verify = new WmsDb(options);
+        Assert.Equal(100, await verify.Principals.CountAsync(p => p.Status == "pending"));
+    }
+
+    [Fact]
+    public async Task FollowupPagesDoNotDisplaceOperationalPackages()
+    {
+        await using var factory = await Factory();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WmsDb>();
+            db.SupportingRecords.AddRange(Enumerable.Range(0, 55).Select(i => new SupportingRecord { Id = $"followups|{i:D3}", WarehouseId = "main", Kind = "followups", PayloadJson = JsonSerializer.Serialize(new { note = $"Note {i}" }) }));
+            db.SupportingRecords.Add(new SupportingRecord { Id = "package|regression", WarehouseId = "main", Kind = "packages", PayloadJson = "{\"id\":\"regression\",\"items\":[]}" });
+            await db.SaveChangesAsync();
+        }
+        using var client = await Login(factory, "operator");
+        var first = await Read(await client.GetAsync(SnapshotPath + "?view=monitoring"));
+        Assert.Equal(25, first.GetProperty("followups").GetArrayLength());
+        Assert.Equal(55, first.GetProperty("supportingPage").GetProperty("total").GetInt32());
+        Assert.Contains(first.GetProperty("packages").EnumerateArray(), p => p.GetProperty("id").GetString() == "regression");
+        var third = await Read(await client.GetAsync(SnapshotPath + "?view=monitoring&supportingPage=3"));
+        Assert.Equal(5, third.GetProperty("followups").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task SupportingLimitUsesStoredJsonRepresentation()
+    {
+        await using var factory = await Factory();
+        using var client = await Login(factory, "admin");
+        var empty = JsonSerializer.Serialize(new { name = "small-unit", factor = "1", padding = "" });
+        var padding = new string('x', 16384 - System.Text.Encoding.UTF8.GetByteCount(empty));
+        Assert.Equal(HttpStatusCode.BadRequest, (await Edit(client, "unitMaster", new { name = "small-unit", factor = "1", padding })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Edit(client, "unitMaster", new { name = "small-unit", factor = "1" })).StatusCode);
+        var snapshot = await Read(await client.GetAsync(SnapshotPath));
+        Assert.Contains(snapshot.GetProperty("unitMaster").EnumerateArray(), row => row.GetProperty("name").GetString() == "small-unit");
+    }
+
+    [Fact]
+    public async Task SnapshotBoundsUsersAndDoesNotMaterializeLegacyHugeHistory()
+    {
+        await using var factory = await Factory();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<WmsDb>();
+            db.Principals.AddRange(Enumerable.Range(0, 70).Select(i => new Principal { Id = $"page-{i:D3}", Subject = $"page:{i}", Issuer = "access-request", Email = $"page{i}@example.test", Name = "Paged" }));
+            db.SupportingRecords.Add(new SupportingRecord { Id = "followups|legacy", WarehouseId = "main", Kind = "followups", PayloadJson = JsonSerializer.Serialize(new { note = new string('x', 100000) }) });
+            db.Audit.Add(new AuditRecord { TransactionId = "legacy-huge-edit", PrincipalId = "operator", WarehouseId = "main", Action = "followups", DetailJson = JsonSerializer.Serialize(new { reason = new string('x', 100000) }), PostedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
+        using var client = await Login(factory, "admin");
+        var first = await Read(await client.GetAsync(SnapshotPath + "?view=access&status=pending"));
+        Assert.Equal(25, first.GetProperty("users").GetArrayLength());
+        Assert.True(first.GetProperty("supportingRecordsWarning").GetBoolean());
+        Assert.Empty(first.GetProperty("followups").EnumerateArray());
+        Assert.DoesNotContain(first.GetProperty("audit").EnumerateArray(), row => row.GetProperty("id").GetString() == "legacy-huge-edit");
+        var second = await Read(await client.GetAsync(SnapshotPath + "?view=access&status=pending&usersPage=2"));
+        Assert.Equal(2, second.GetProperty("userPage").GetProperty("page").GetInt32());
+        Assert.DoesNotContain(second.GetProperty("users").EnumerateArray(), row => row.GetProperty("id").GetString() == first.GetProperty("users")[0].GetProperty("id").GetString());
     }
 
     private sealed class ApiFactory(string connection) : WebApplicationFactory<WmsApi::Program>

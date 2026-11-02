@@ -1,4 +1,6 @@
 import React, { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDateTime, TableTimestamp } from "./DateTime";
+import { Reference } from "./Reference";
 import {
   CaretLeft,
   CaretRight,
@@ -13,15 +15,23 @@ import {
   ProductName,
   Tag,
   useText,
+  useCataloguePageSize,
 } from "./ui";
 import { productSuggestions } from "./autocomplete-model";
 import { useServerCatalogue } from "./server-catalogue";
+import { useBulkSelection } from "./selection";
+import { BulkActions, type BulkAction } from "./BulkActions";
 import {
   workQueuePage,
   queryForDocumentDraft,
   workQueueRows,
   type WorkQueueItem,
 } from "./work-queue-model";
+
+const columnWidths: Record<string, number> = {
+  id: 216, sku: 200, source: 192, ordered: 104, received: 104, qty: 104,
+  documentDate: 120, scheduledDate: 128, remaining: 104, status: 152, updatedAt: 152, actions: 96,
+};
 
 export function WorkQueue({
   items,
@@ -35,6 +45,8 @@ export function WorkQueue({
   setCatalogueQuery,
   focusDocument,
   lookupSku,
+  bulkActions,
+  bulkScope = "",
 }: {
   items: WorkQueueItem[];
   products: any[];
@@ -47,8 +59,11 @@ export function WorkQueue({
   setCatalogueQuery?: (query: any) => void;
   focusDocument?: string;
   lookupSku?: string;
+  bulkActions?: BulkAction[];
+  bulkScope?: string;
 }) {
   const t = useText();
+  const { date } = useDateTime();
   const panel = useRef<HTMLElement>(null);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
@@ -56,12 +71,14 @@ export function WorkQueue({
   const [sku, setSku] = useState("");
   const [sort, setSort] = useState("document");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [pageSize, setPageSize] = useCataloguePageSize();
   const rows = useMemo(
     () => workQueueRows(items, products, kind),
     [items, products, kind],
   );
-  const server = useServerCatalogue(data || {}, setCatalogueQuery, queryForDocumentDraft({ view: kind, query: deferredQuery, status, sku, sort, page, pageSize }, { document: focusDocument, newOrderSku: lookupSku }));
+  const server = useServerCatalogue(data || {}, setCatalogueQuery, queryForDocumentDraft({ view: kind, query: deferredQuery, status, sku, sort, page, pageSize, from, to }, { document: focusDocument, newOrderSku: lookupSku }));
   const localResult = useMemo(
     () =>
       workQueuePage(server ? rows.filter((row) => server.ids.includes(row.id)) : rows, {
@@ -72,10 +89,12 @@ export function WorkQueue({
         page: setCatalogueQuery ? 1 : page,
         pageSize,
         selected,
+        from, to,
       }),
-    [rows, deferredQuery, status, sku, sort, page, pageSize, selected, server],
+    [rows, deferredQuery, status, sku, sort, page, pageSize, selected, server, from, to],
   );
   const result = server ? { ...localResult, ...server, rows: localResult.rows } : localResult;
+  const bulk = useBulkSelection({ rows: result.rows, scope: JSON.stringify([bulkScope, kind, query, status, sku, sort, page, pageSize, from, to]), label: row => `${row.id} · ${row.productName}`, allowed: row => !!bulkActions?.some(action => !action.allowed || action.allowed(row)), disabled: query !== deferredQuery || !!setCatalogueQuery && !server });
   const productMap = new Map(products.map((product) => [product.sku, product]));
   const statuses = server?.statuses || [...new Set(rows.map((row) => row.status))].sort();
   const skus = [...new Set(rows.map((row) => row.sku))].sort();
@@ -99,6 +118,7 @@ export function WorkQueue({
     setQuery("");
     setStatus("");
     setSku("");
+    setFrom(""); setTo("");
     setPage(1);
   };
   const open = (id: string) => {
@@ -121,11 +141,11 @@ export function WorkQueue({
       ),
       render: (row) => (
         <span className="queue-document">
-          <strong>{row.id}</strong>
+          <strong className="queue-reference" title={row.id}><Reference value={row.id} /></strong>
           {selected === row.id && (
             <small className="queue-selected">
               <CheckCircle size={15} aria-hidden="true" />
-              {t("Selected", "Terpilih")}
+              {bulkActions ? t("Detail open", "Detail terbuka") : t("Selected", "Terpilih")}
             </small>
           )}
         </span>
@@ -143,7 +163,7 @@ export function WorkQueue({
       ),
     },
     ...(["quality", "putaway"].includes(kind)
-      ? [{ key: "source", label: t("Source", "Sumber") }]
+      ? [{ key: "source", label: t("Source", "Sumber"), render: row => <span className="queue-reference" title={row.source}><Reference value={row.source || ""} /></span> }]
       : []),
     ...(kind === "receiving"
       ? [
@@ -153,6 +173,8 @@ export function WorkQueue({
       : kind === "orders"
         ? [{ key: "qty", label: t("Requested", "Diminta"), numeric: true }]
         : []),
+    { key: "documentDate", label: t("Document date", "Tanggal dokumen"), render: row => date(row.documentDate) },
+    { key: "scheduledDate", label: kind === "receiving" ? t("Expected arrival", "Rencana tiba") : ["orders", "reservations", "picking", "shipping"].includes(kind) ? t("Planned shipment", "Rencana kirim") : t("Scheduled", "Rencana"), render: row => date(row.scheduledDate) },
     { key: "remaining", label: t("Remaining", "Sisa"), numeric: true },
     {
       key: "status",
@@ -169,6 +191,7 @@ export function WorkQueue({
         </Tag>
       ),
     },
+    { key: "updatedAt", label: t("Last updated", "Terakhir diubah"), render: row => <TableTimestamp value={row.updatedAt} /> },
     {
       key: "actions",
       label: t("Actions", "Tindakan"),
@@ -197,6 +220,8 @@ export function WorkQueue({
         </div>
       </div>
       <div className="catalogue-toolbar">
+        <Field label={t("Document date from", "Tanggal dokumen dari")} type="date" value={from} max={to || undefined} onChange={e => { setFrom(e.target.value); setPage(1); }} />
+        <Field label={t("Document date to", "Tanggal dokumen sampai")} type="date" value={to} min={from || undefined} onChange={e => { setTo(e.target.value); setPage(1); }} />
         <div className="search">
           <MagnifyingGlass size={20} aria-hidden="true" />
           <Field
@@ -286,11 +311,12 @@ export function WorkQueue({
             `${result.total} dari ${server?.scopeTotal ?? rows.length} dokumen`,
           )}
         </span>
-        {(query || status || sku) && (
+        {(query || status || sku || from || to) && (
           <Button onClick={clear}>{t("Clear filters", "Hapus filter")}</Button>
         )}
       </div>
       <p className="queue-context">
+        {(from || to) && <span>{t("Documents without a document date are excluded from this period. ", "Dokumen tanpa tanggal dokumen tidak termasuk dalam periode ini. ")}</span>}
         {t(
           "Quantities in units. Open a row to view its details below.",
           "Jumlah dalam unit. Buka baris untuk melihat detail di bawah.",
@@ -302,6 +328,7 @@ export function WorkQueue({
           )}
         </span>
       </p>
+      {bulkActions && <BulkActions selection={bulk} actions={bulkActions} />}
       <div
         className="work-queue-table"
         aria-busy={query !== deferredQuery}
@@ -311,9 +338,10 @@ export function WorkQueue({
       >
         <DataTable
           label={title}
+          selection={bulkActions ? bulk : undefined}
           showSelectionMark={false}
           rows={result.rows}
-          columns={columns}
+          columns={columns.map(column => ({ ...column, width: columnWidths[column.key], className: `queue-column-${column.key}` }))}
           selected={selected}
           onSelect={(row) => open(row.id)}
           empty={

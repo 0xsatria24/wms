@@ -1,0 +1,7 @@
+{
+  "name": "inventory-wms-local",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix prototype run dev --"
+  }
+}

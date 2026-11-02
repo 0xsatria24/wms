@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Wms.Infrastructure;
+using Wms.Shared;
 using static Wms.Shared.Rules;
 
 namespace Wms.Modules.Access;
@@ -33,7 +34,7 @@ public static class ProductionBootstrap
             db.AccessGrants.Add(new AccessGrant { PrincipalId = admin.Id, WarehouseId = wh.Id, Role = "admin" });
             foreach (var code in wh.StorageLocations.Concat(["Receiving", "QC", "Staging"]))
                 db.Locations.Add(new Location { Id = $"{wh.Id}|{code}", WarehouseId = wh.Id, Code = code, Pickable = wh.StorageLocations.Contains(code) });
-            db.Audit.Add(new AuditRecord { TransactionId = $"BOOTSTRAP-{Guid.NewGuid():N}", WarehouseId = wh.Id, PrincipalId = admin.Id, Action = "production-bootstrap", DetailJson = "{}", PostedAt = DateTimeOffset.UtcNow });
+            db.Audit.Add(new AuditRecord { TransactionId = ReferenceId.New(), WarehouseId = wh.Id, PrincipalId = admin.Id, Action = "production-bootstrap", DetailJson = "{}", PostedAt = DateTimeOffset.UtcNow });
         }
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);

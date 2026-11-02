@@ -52,7 +52,7 @@ public sealed class PurchaseOrderImport(WmsDb db)
         }
         journal.Version = input.SourceVersion;
         journal.PayloadJson = payload.GetRawText();
-        var result = new CommandResult($"IMPORT-{Guid.NewGuid():N}", "imported", "erp-po", DateTimeOffset.UtcNow);
+        var result = new CommandResult(ReferenceId.New(), "imported", "erp-po", DateTimeOffset.UtcNow);
         db.Requests.Add(new IdempotencyRequest { ScopeKey = scope, PrincipalId = actor.Id, WarehouseId = actor.WarehouseId, PayloadHash = hash, ResultJson = JsonSerializer.Serialize(result), CreatedAt = result.Stamp });
         db.Audit.Add(new AuditRecord { TransactionId = result.Id, WarehouseId = actor.WarehouseId, PrincipalId = actor.Id, Action = "erp-po", DetailJson = payload.GetRawText(), PostedAt = result.Stamp });
         await db.SaveChangesAsync(ct);

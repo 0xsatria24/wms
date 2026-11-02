@@ -8,6 +8,8 @@ export interface WorkQueueItem {
   qty?: number;
   shipped?: number;
   status?: string;
+  documentDate?: string;
+  scheduledDate?: string;
 }
 
 export function selectDraftDocument<T extends { id: string } = any>(rows: T[], savedId?: string, preferred?: T): T | undefined {
@@ -74,6 +76,8 @@ export function workQueuePage(
     page: number;
     pageSize: number;
     selected?: string;
+    from?: string;
+    to?: string;
   },
 ) {
   const query = options.query.trim().toLocaleLowerCase();
@@ -84,7 +88,9 @@ export function workQueuePage(
           value.toLocaleLowerCase().includes(query),
         )) &&
       (!options.status || row.status === options.status) &&
-      (!options.sku || row.sku === options.sku),
+      (!options.sku || row.sku === options.sku) &&
+      (!options.from || !!row.documentDate && row.documentDate >= options.from) &&
+      (!options.to || !!row.documentDate && row.documentDate <= options.to),
   );
   filtered.sort(
     (a, b) =>

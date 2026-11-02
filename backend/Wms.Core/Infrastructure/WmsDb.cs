@@ -21,6 +21,31 @@ public sealed class WmsDb(DbContextOptions<WmsDb> options) : DbContext(options)
     public DbSet<Observation> Observations => Set<Observation>();
     public DbSet<CompanySettings> Settings => Set<CompanySettings>();
     public DbSet<SupportingRecord> SupportingRecords => Set<SupportingRecord>();
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var entry in ChangeTracker.Entries<OperationalDocument>())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified)) continue;
+            var doc = entry.Entity;
+            if (entry.State == EntityState.Added)
+            {
+                doc.CreatedAt ??= now;
+                var zone = (await OperationalSettings.Read(this, "warehouse", doc.WarehouseId, new WarehouseDetails(), cancellationToken)).Value.TimeZone;
+                doc.DocumentDate ??= DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, TimeZoneInfo.FindSystemTimeZoneById(zone)).DateTime);
+            }
+            doc.UpdatedAt = now;
+            if (entry.Property(d => d.Actual).IsModified && (doc.Kind is "po" or "inspection" or "putaway" or "transfer" or "return-stock") && doc.Quantity > 0 && doc.Actual == doc.Quantity) doc.CompletedAt ??= now;
+            if (entry.Property(d => d.Shipped).IsModified && doc.Kind == "order" && doc.Quantity > 0 && doc.Shipped == doc.Quantity) doc.CompletedAt ??= now;
+            var statusChanged = entry.State == EntityState.Added || entry.Property(d => d.Status).IsModified;
+            if (!statusChanged) continue;
+            if (doc.Status == "counting") { doc.StartedAt = now; doc.SubmittedAt = null; }
+            if (doc.Status is "review" or "pending-approval") doc.SubmittedAt = now;
+            if (doc.Status is "approved" or "adjusted") doc.ApprovedAt = now;
+            if (doc.Status is "closed" or "completed" or "cancelled") doc.CompletedAt = now;
+        }
+        return await base.SaveChangesAsync(cancellationToken);
+    }
     protected override void OnModelCreating(ModelBuilder m)
     {
         m.Entity<Warehouse>().HasIndex(x => new { x.CompanyId, x.Name }).IsUnique();

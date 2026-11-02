@@ -23,6 +23,7 @@ public sealed partial class CommandProcessor(WmsDb db)
     private string transactionId = "";
     private DateTimeOffset now;
     private StockMovement? movement;
+    private ApprovalSettings approvalSettings = new();
 
     public async Task<CommandResult> Handle(ActingPrincipal principal, CommandRequest input, string key, CancellationToken ct = default)
     {
@@ -65,7 +66,8 @@ public sealed partial class CommandProcessor(WmsDb db)
         var requestedSku = input.Payload.Text("sku");
         items = await db.Items.AsNoTracking().Where(i => i.CompanyId == "demo" && (relatedItems.Contains(i.Id) || i.Sku == requestedSku)).Select(i => new Item { Id = i.Id, Sku = i.Sku, Barcode = i.Barcode, Active = i.Active, Unit = i.Unit, ConversionFactor = i.ConversionFactor }).ToListAsync(ct);
         Require(await db.Principals.AnyAsync(u => u.Id == actor.Id && u.Status == "active", ct) && await db.AccessGrants.AnyAsync(g => g.PrincipalId == actor.Id && g.WarehouseId == actor.WarehouseId && g.Role == actor.Role, ct), "denied", 403);
-        transactionId = $"TX-{Guid.NewGuid():N}";
+        approvalSettings = (await OperationalSettings.Read(db, "approvals", actor.WarehouseId, new ApprovalSettings(), ct)).Value;
+        transactionId = ReferenceId.New();
         await Apply(ct);
         foreach (var p in positions)
             Require(p.OnHand >= 0 && p.Committed >= 0 && p.Committed <= p.OnHand, "invariant");
@@ -138,7 +140,7 @@ public sealed partial class CommandProcessor(WmsDb db)
     }
     private OperationalDocument AddDoc(string kind, string itemId, decimal qty, string source, string? id = null)
     {
-        var doc = new OperationalDocument { Id = id ?? $"{kind.ToUpperInvariant()}-{Guid.NewGuid():N}", Kind = kind, ItemId = itemId, WarehouseId = actor.WarehouseId, Quantity = qty, Source = source, Creator = actor.Id };
+        var doc = new OperationalDocument { Id = id ?? ReferenceId.New(), Kind = kind, ItemId = itemId, WarehouseId = actor.WarehouseId, Quantity = qty, Source = source, Creator = actor.Id };
         db.Documents.Add(doc);
         documents.Add(doc);
         return doc;
@@ -155,6 +157,11 @@ public sealed partial class CommandProcessor(WmsDb db)
         return a;
     }
     private void VerifyLocation(string value) => Require(command.Payload.Text("locationScan") == value, "scan-location", 400);
+    private void Reviewer(string scope)
+    {
+        Supervisor(actor);
+        Require(scope != "admin" || actor.Role == "admin", "denied", 403);
+    }
 
     private async Task Apply(CancellationToken ct)
     {

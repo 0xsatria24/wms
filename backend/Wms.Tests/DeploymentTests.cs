@@ -40,6 +40,29 @@ public sealed class DeploymentTests
         });
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("?rememberMe=false", false)]
+    [InlineData("?rememberMe=true", true)]
+    public async Task SsoRememberMeChoiceSurvivesProtectedOidcState(string query, bool persistent)
+    {
+        await using var factory = Factory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://warehouse.example"), AllowAutoRedirect = false });
+        using var response = await client.GetAsync("/auth/login" + query);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var parameters = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(response.Headers.Location!.Query);
+        var options = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<OpenIdConnectOptions>>().Get(OpenIdConnectDefaults.AuthenticationScheme);
+        var properties = options.StateDataFormat.Unprotect(parameters["state"]!);
+        Assert.NotNull(properties);
+        Assert.Equal(persistent, properties.IsPersistent);
+        Assert.Equal("/", properties.RedirectUri);
+        if (persistent)
+        {
+            Assert.InRange(properties.ExpiresUtc!.Value - DateTimeOffset.UtcNow, TimeSpan.FromDays(14) - TimeSpan.FromMinutes(1), TimeSpan.FromDays(14));
+            Assert.False(properties.AllowRefresh);
+        }
+    }
+
     [Fact]
     public async Task UserInfoVerifiedEmailIsMappedByOidcClaimActions()
     {
@@ -69,6 +92,40 @@ public sealed class DeploymentTests
         using var response = await client.GetAsync("/auth/login");
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Contains("redirect_uri=https%3A%2F%2Fwarehouse.example%2Fsignin-oidc", response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
+    public async Task SsoLoginIsLimitedPerTrustedClientAddress()
+    {
+        await using var factory = Factory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://warehouse.example"), AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "203.0.113.10");
+        for (var attempt = 0; attempt < 5; attempt++)
+            Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/auth/login")).StatusCode);
+        var rejected = await client.GetAsync("/AUTH/LOGIN/");
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        Assert.NotNull(rejected.Headers.RetryAfter);
+        Assert.True(rejected.Headers.CacheControl!.NoStore);
+        client.DefaultRequestHeaders.Remove("X-Forwarded-For");
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "203.0.113.11");
+        Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/auth/login")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/workspaces/main/snapshot")).StatusCode);
+    }
+
+    [Fact]
+    public async Task SsoLoginAlsoHasAnAggregateCeiling()
+    {
+        await using var factory = Factory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://warehouse.example"), AllowAutoRedirect = false });
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            client.DefaultRequestHeaders.Remove("X-Forwarded-For");
+            client.DefaultRequestHeaders.Add("X-Forwarded-For", $"203.0.113.{attempt + 1}");
+            Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/auth/login")).StatusCode);
+        }
+        client.DefaultRequestHeaders.Remove("X-Forwarded-For");
+        client.DefaultRequestHeaders.Add("X-Forwarded-For", "203.0.113.200");
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.GetAsync("/AUTH/LOGIN/")).StatusCode);
     }
 
     private sealed class ProxyAddress : IStartupFilter

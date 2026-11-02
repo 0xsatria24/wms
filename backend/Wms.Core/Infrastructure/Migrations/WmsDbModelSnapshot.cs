@@ -319,9 +319,15 @@ namespace Wms.Api.Infrastructure.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("CompanyId")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("Counted")
                         .HasPrecision(18, 6)
@@ -331,9 +337,15 @@ namespace Wms.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Creator")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateOnly?>("DocumentDate")
+                        .HasColumnType("date");
 
                     b.Property<decimal?>("Expected")
                         .HasPrecision(18, 6)
@@ -367,6 +379,9 @@ namespace Wms.Api.Infrastructure.Migrations
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
 
+                    b.Property<DateOnly?>("ScheduledDate")
+                        .HasColumnType("date");
+
                     b.Property<decimal>("Shipped")
                         .HasPrecision(18, 6)
                         .HasColumnType("numeric(18,6)");
@@ -375,12 +390,21 @@ namespace Wms.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("TargetWarehouseId")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("Version")
                         .IsConcurrencyToken()

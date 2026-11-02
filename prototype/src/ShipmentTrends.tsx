@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Chart from "chart.js/auto";
+import { useDateTime } from "./DateTime";
 import { Empty, Field, Summary, Tag, useText } from "./ui";
 
 function ShipmentChart({ summary, series, locale }) {
@@ -62,6 +63,7 @@ function ShipmentChart({ summary, series, locale }) {
 
 export function ShipmentTrends({ summary, sku, locale }) {
   const t = useText();
+  const { stamp } = useDateTime();
   const [unit, setUnit] = useState("");
   const series =
     summary?.sku === sku
@@ -118,9 +120,7 @@ export function ShipmentTrends({ summary, sku, locale }) {
               </strong>
               <small>
                 {summary.year} · {t("Through", "Sampai")}{" "}
-                {new Date(summary.asOf).toLocaleDateString(locale, {
-                  timeZone: "Asia/Bangkok",
-                })}
+                {stamp(summary.asOf, false)}
               </small>
             </div>
             <div>

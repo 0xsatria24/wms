@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../scripts/start-local.ps1 -BackendOnly",
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build && node scripts/prepare-sites-build.mjs",

@@ -20,6 +20,10 @@ API dan worker berbagi model/intinya sebagai modular monolith. Tidak ada microse
 
 ## Menjalankan lokal
 
+Untuk instalasi tanpa IDE/Docker pada PC Windows klien, tersedia [jalur installer Windows dengan SSO](windows-local.md). Ini terpisah dari startup development berikut dan tidak menggantikan deployment Docker/Linux.
+
+Jalankan `npm run dev` dari root proyek atau folder `prototype`. Perintah ini menyalakan PostgreSQL lokal, API dan worker lebih dahulu, menunggu API siap, lalu menjalankan Vite pada alamat yang dicetak terminal. Setelah laptop restart, gunakan perintah yang sama sebelum login. Database dapat memerlukan beberapa menit untuk recovery; kegagalan startup menghentikan perintah sebelum frontend dijalankan. Perintah ini khusus lingkungan Windows lokal yang telah disiapkan di bawah.
+
 Pada workspace pengembangan ini, SDK .NET10.0.403 disiapkan portabel di `.tools/dotnet`, PostgreSQL18.4 tersedia pada komputer, dan cluster milik proyek berada di `.runtime/pgdata` pada loopback55432. Cluster ini terpisah dari instalasi/service/database lain. Kredensial acak hanya berada di `.runtime/`, yang diabaikan Git.
 
 ```powershell

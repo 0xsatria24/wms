@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { WarehouseTimeZone, WarehouseClock } from "./DateTime";
+import { formatStamp } from "./date-time";
 import {
   Cube,
   TrayArrowDown,
@@ -16,6 +18,7 @@ import { initialState, MAIN } from "./fixtures";
 import * as api from "./api";
 import {
   Locale,
+  CataloguePageSize,
   useText,
   Button,
   Field,
@@ -25,7 +28,8 @@ import {
   errorText,
 } from "./ui.tsx";
 import { screens } from "./catalog";
-import { Auth, Workspace, Settings } from "./account.tsx";
+import { Auth, Workspace } from "./account.tsx";
+import { Settings } from "./Settings";
 import { Stock } from "./Stock.tsx";
 import { Operations } from "./Operations.tsx";
 import { Access, Master, Controls } from "./management.tsx";
@@ -79,6 +83,20 @@ function Application({ locale, setLocale }) {
       : "signin",
   );
   const [theme, setTheme] = useState("light");
+  const [preferences, setPreferences] = useState(api.defaultPreferences);
+  const applyPreferences = (next: api.UserPreferences) => {
+    setPreferences(next);
+    setLocale(next.language);
+    setTheme(next.theme);
+  };
+  const loadPreferences = async (owner: string) => {
+    const next = await api.preferences().catch(() => {
+      setNotice({ kind: "warning", message: t("Saved preferences could not be loaded. Default preferences are being used.", "Preferensi tersimpan belum dapat dimuat. Preferensi awal digunakan.") });
+      return api.defaultPreferences;
+    });
+    if (userRef.current?.id === owner) applyPreferences(next);
+    return next;
+  };
   const [mode, setMode] = useState("normal");
   const [menu, setMenu] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -96,7 +114,7 @@ function Application({ locale, setLocale }) {
     if (orderId) setDrafts((all) => ({ ...all, [`${userRef.current?.id}|${warehouseRef.current}|${next}`]: { ...all[`${userRef.current?.id}|${warehouseRef.current}|${next}`], order: orderId } }));
     location.hash = next;
     setRoute(next);
-    setCatalogueQuery({ view: next, page: 1, pageSize: 25 });
+    setCatalogueQuery({ view: next, page: 1, pageSize: preferences.pageSize });
     setMenu(false);
     setNotice(null);
   };
@@ -156,6 +174,8 @@ function Application({ locale, setLocale }) {
       const current = await api.login(account.id, "demo123");
       userRef.current = current;
       replaceUser(current);
+      await loadPreferences(current.id);
+      if (userRef.current?.id !== current.id) return;
       const target = current.warehouses.includes(warehouse)
         ? warehouse
         : current.warehouses[0];
@@ -165,16 +185,18 @@ function Application({ locale, setLocale }) {
       setNotice({ kind: "error", message: errorText(error.message, t) });
     }
   };
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, rememberMe: boolean) => {
     if (!/^(admin|operator|supervisor)@demo\.company$/.test(email))
       throw new api.ApiError("credentials", 401);
-    const current = await api.login(email.split("@")[0], password);
+    const current = await api.login(email.split("@")[0], password, rememberMe);
     userRef.current = current;
     replaceUser(current);
-    const target = current.warehouses[0];
+    const prefs = await loadPreferences(current.id);
+    if (userRef.current?.id !== current.id) return;
+    const target = current.warehouses.includes(prefs.defaultWarehouse) ? prefs.defaultWarehouse : current.warehouses[0];
     setWarehouse(target);
     await refresh(target, current.id);
-    go("workspace");
+    go(prefs.startPage);
   };
   useEffect(() => {
     api
@@ -185,10 +207,12 @@ function Application({ locale, setLocale }) {
         if (session.user?.status === "active") {
           userRef.current = session.user;
           replaceUser(session.user);
-          const target = session.user.warehouses[0];
+          const prefs = await loadPreferences(session.user.id);
+          if (userRef.current?.id !== session.user.id) return;
+          const target = session.user.warehouses.includes(prefs.defaultWarehouse) ? prefs.defaultWarehouse : session.user.warehouses[0];
           setWarehouse(target);
           if (target) await refresh(target, session.user.id);
-          go("workspace");
+          go(prefs.startPage);
         } else if (session.user)
           setNotice({
             kind: session.user.status === "pending" ? "warning" : "error",
@@ -233,12 +257,12 @@ function Application({ locale, setLocale }) {
     const handle = () => {
       const next = location.hash.slice(1);
       setRoute(user || authRoutes.includes(next) ? next : "signin");
-      if (catalogueRef.current.view !== next) setCatalogueQuery({ view: next, page: 1, pageSize: 25 });
+      if (catalogueRef.current.view !== next) setCatalogueQuery({ view: next, page: 1, pageSize: preferences.pageSize });
       setMenu(false);
     };
     window.addEventListener("hashchange", handle);
     return () => window.removeEventListener("hashchange", handle);
-  }, [user]);
+  }, [user, preferences.pageSize]);
   useEffect(() => {
     document.documentElement.lang = locale === "en" ? "en" : "id";
   }, [locale]);
@@ -362,8 +386,8 @@ function Application({ locale, setLocale }) {
         else
           flash(
             t(
-              `Recorded by the development API: ${id}. ERP is tracked separately.`,
-              `Tercatat oleh API pengembangan: ${id}. Status ERP ditampilkan terpisah.`,
+              `Recorded by the API: ${id} · ${formatStamp(posted.stamp, locale, data.warehouseTimeZone)}. ERP is tracked separately.`,
+              `Tercatat oleh API: ${id} · ${formatStamp(posted.stamp, locale, data.warehouseTimeZone)}. Status ERP ditampilkan terpisah.`,
             ),
           );
         setReview(null);
@@ -399,7 +423,7 @@ function Application({ locale, setLocale }) {
     }
     try {
       const row = (await api.pending()).find((p) => p.id === id);
-      const posted = await api.retryOriginal(row, user, warehouse);
+      const posted = row?.status === "unknown" ? await api.checkOriginal(row, user, warehouse) : await api.retryOriginal(row, user, warehouse);
       await refresh().catch(() => {});
       if (posted.message === "unknown" || posted.message === "offline") {
         flash(
@@ -413,15 +437,25 @@ function Application({ locale, setLocale }) {
       }
       flash(
         t(
-          `Original request resolved: ${posted.id}.`,
-          `Permintaan asal sudah jelas: ${posted.id}.`,
+          `Original request resolved: ${posted.id} · ${formatStamp(posted.stamp, locale, data.warehouseTimeZone)}.`,
+          `Permintaan asal sudah jelas: ${posted.id} · ${formatStamp(posted.stamp, locale, data.warehouseTimeZone)}.`,
         ),
       );
     } catch (e) {
       flash(errorText(e.message, t), "error");
     }
   };
+  const publishPending = async () => {
+    const pending = await api.pending();
+    if (userRef.current?.id !== user.id || warehouseRef.current !== warehouse) return;
+    replaceData(previous => {
+      const next = { ...previous, pending };
+      dataRef.current = next;
+      return next;
+    });
+  };
   const ctx = {
+    refresh,
     catalogueQuery,
     authMode,
     companyName,
@@ -437,6 +471,30 @@ function Application({ locale, setLocale }) {
     draft: drafts[draftKey] || {},
     patchDraft,
     checkPending,
+    editRecord: async (type: string, payload: any) => {
+      if (userRef.current?.id !== user.id || warehouseRef.current !== warehouse) throw new api.ApiError("scope", 403);
+      await api.editRecord(warehouse, type, payload);
+    },
+    bulkCommand: async (type: string, payload: any, version?: number) => {
+      if (userRef.current?.id !== user.id || warehouseRef.current !== warehouse) throw new api.ApiError("scope", 403);
+      const source = payload.document || payload.order || payload.task || payload.event;
+      const pending = (await api.pending()).some(row => row.request.user === user.id && row.request.warehouse === warehouse && row.request.type === type && source && (row.request.payload.document || row.request.payload.order || row.request.payload.task || row.request.payload.event) === source);
+      if (pending) throw new api.ApiError("original-request-pending", 409);
+      const request = { id: crypto.randomUUID(), type, payload, warehouse, user: user.id };
+      const body = api.businessCommand(request, dataRef.current);
+      if (version !== undefined) body.expectedVersion = version;
+      const result = await api.send(request.id, body, user.id, mode).finally(() => publishPending().catch(() => {}));
+      return result.message === "unknown" || result.message === "offline" ? { status: "pending" as const, message: result.message } : undefined;
+    },
+    recoverRequest: async (id: string, intent = "check") => {
+      if (userRef.current?.id !== user.id || warehouseRef.current !== warehouse) throw new api.ApiError("scope", 403);
+      if (mode === "offline") return { status: "pending" as const, message: "offline" };
+      const row = (await api.pending()).find(request => request.id === id);
+      if (!row) throw new api.ApiError("source", 404);
+      if (intent === "send" && row.status !== "offline") throw new api.ApiError("conflict", 409);
+      const result = await (intent === "check" ? api.checkOriginal(row, user, warehouse) : api.retryOriginal(row, user, warehouse)).finally(() => publishPending().catch(() => {}));
+      return result.message === "unknown" || result.message === "offline" ? { status: "pending" as const, message: result.message } : undefined;
+    },
     locale,
     createUser: async (name: string, email: string, reason: string) => {
       await api.createUser(warehouse, name, email, reason);
@@ -497,7 +555,7 @@ function Application({ locale, setLocale }) {
       />
     );
   return (
-    <>
+    <WarehouseTimeZone.Provider value={data.warehouseTimeZone || "Asia/Jakarta"}><CataloguePageSize.Provider value={preferences.pageSize}>
       <a
         href="#main"
         className="skip-link"
@@ -587,6 +645,7 @@ function Application({ locale, setLocale }) {
               <ShieldCheck size={17} aria-hidden="true" />
               {t("Simulation data", "Data simulasi")}
             </span>}
+            <WarehouseClock />
             <div className="topbar-account">
               <span>
                 {user.name}
@@ -636,6 +695,11 @@ function Application({ locale, setLocale }) {
               <Workspace {...ctx} setWarehouse={setWarehouse} />
             ) : route === "settings" ? (
               <Settings
+                key={`${user.id}|${warehouse}`}
+                warehouse={warehouse}
+                preferences={preferences}
+                onPreferencesSaved={(next) => { if (userRef.current?.id === user.id) applyPreferences(next); }}
+                refresh={refresh}
                 {...{
                   user,
                   setUser,
@@ -665,6 +729,7 @@ function Application({ locale, setLocale }) {
                   </div>
                 </div>
                 {data.erpDelivery?.maintenance && <Notice kind="warning">{t("Recovery reconciliation is in progress. Write operations are paused.", "Rekonsiliasi pemulihan sedang berlangsung. Penulisan ditahan.")}</Notice>}
+                {data.supportingRecordsWarning && <Notice kind="warning">{t("Some saved supporting records exceed the size or list limit and are not shown. Ask an administrator to review the stored records.", "Sebagian catatan pendukung melebihi batas ukuran atau jumlah daftar dan tidak ditampilkan. Minta administrator meninjau catatan tersimpan.")}</Notice>}
                 {catalogueLoading && !loading && <Notice>{t("Loading current results…", "Memuat hasil saat ini…")}</Notice>}
                 {loading || snapshotScope !== `${user.id}|${warehouse}` ? (
                   <Notice
@@ -718,11 +783,7 @@ function Application({ locale, setLocale }) {
               {data.asOf && snapshotScope === `${user.id}|${warehouse}` && (
                 <span>
                   {t("Last loaded", "Terakhir dimuat")}:{" "}
-                  {new Date(data.asOf).toLocaleString(
-                    locale === "en" ? "en-GB" : "id-ID",
-                    { timeZone: "Asia/Bangkok" },
-                  )}{" "}
-                  (UTC+7)
+                  {formatStamp(data.asOf, locale, data.warehouseTimeZone)}{" "}
                 </span>
               )}
               <button
@@ -832,6 +893,6 @@ function Application({ locale, setLocale }) {
           )}
         </Modal>
       )}
-    </>
+    </CataloguePageSize.Provider></WarehouseTimeZone.Provider>
   );
 }

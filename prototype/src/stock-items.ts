@@ -11,6 +11,7 @@ export interface StockPosition {
   frozen?: boolean;
   pickable?: boolean;
   unit?: string;
+  lastMovementAt?: string | null;
 }
 
 export function stockStatusKeys(position: StockPosition): string[] {
@@ -114,6 +115,14 @@ export function stockItemPage(
       ...group,
       product,
       rows,
+      lastMovementAt: rows.reduce<string | null>((latest, row) => {
+        const stamp = row.lastMovementAt;
+        return stamp &&
+          Number.isFinite(Date.parse(stamp)) &&
+          (!latest || Date.parse(stamp) > Date.parse(latest))
+          ? stamp
+          : latest;
+      }, null),
       totals: [...totals.values()],
       locations: [...new Set(rows.map((p) => p.location))],
       conditions: [...new Set(rows.map((p) => p.condition))],

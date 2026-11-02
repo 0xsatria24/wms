@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
@@ -17,6 +18,7 @@ using Wms.Modules.Catalog;
 using Wms.Modules.Inventory;
 using Wms.Modules.Reporting;
 using Wms.Modules.Integration;
+using Wms.Modules.Settings;
 using Wms.Shared;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
@@ -31,6 +33,10 @@ if (args.Contains("--healthcheck", StringComparer.Ordinal))
     return;
 }
 var builder = WebApplication.CreateBuilder(args);
+if (builder.Configuration["deployment-config"] is { } deploymentConfig)
+    builder.Configuration.AddJsonFile(Path.GetFullPath(deploymentConfig), optional: false, reloadOnChange: false);
+builder.Services.AddWindowsService(options => options.ServiceName = "InventoryWms.Api");
+var directHttps = builder.Configuration.GetValue<bool>("Hosting:DirectHttps");
 var demo = builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Development:EnableDemoAuth");
 var gatewayEnabled = builder.Configuration.GetValue<bool>("Gateway:Enabled");
 var erpIngressEnabled = builder.Configuration.GetValue<bool>("ErpIngress:Enabled");
@@ -45,6 +51,24 @@ builder.Services.AddScoped<PurchaseOrderImport>();
 builder.Services.AddAntiforgery(o => { o.HeaderName = "X-XSRF-TOKEN"; o.Cookie.Name = "Wms.Csrf"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict; o.Cookie.SecurePolicy = demo ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always; });
 builder.Services.AddSignalR();
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options =>
+{
+    LoginRateLimits.Configure(options);
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        context.HttpContext.Response.Headers.CacheControl = "no-store";
+        if (LoginRateLimits.IsLogin(context.HttpContext))
+            await context.HttpContext.Response.WriteAsJsonAsync(new { code = "login-rate-limit" }, cancellationToken);
+    };
+    options.AddFixedWindowLimiter("enrollment", limiter =>
+    {
+        limiter.PermitLimit = 10;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+    });
+});
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -57,11 +81,18 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 var keyPath = builder.Configuration["DataProtection:KeyPath"];
 if (!demo && !args.Contains("--bootstrap", StringComparer.Ordinal))
 {
-    if (string.IsNullOrWhiteSpace(keyPath) || string.IsNullOrWhiteSpace(builder.Configuration["ReverseProxy:KnownProxies"]))
+    if (string.IsNullOrWhiteSpace(keyPath) || (!directHttps && string.IsNullOrWhiteSpace(builder.Configuration["ReverseProxy:KnownProxies"])))
         throw new InvalidOperationException("Production requires DataProtection:KeyPath and ReverseProxy:KnownProxies.");
     Directory.CreateDirectory(keyPath);
     builder.Services.AddDataProtection().SetApplicationName("InventoryWms").PersistKeysToFileSystem(new DirectoryInfo(keyPath));
-    builder.Services.AddHttpsRedirection(options => options.HttpsPort = 443);
+    var httpsPort = 443;
+    if (directHttps)
+    {
+        if (!Uri.TryCreate(builder.Configuration["Kestrel:Endpoints:Https:Url"], UriKind.Absolute, out var httpsEndpoint) || httpsEndpoint.Scheme != "https")
+            throw new InvalidOperationException("Direct HTTPS hosting requires Kestrel:Endpoints:Https:Url with an HTTPS URL.");
+        httpsPort = httpsEndpoint.Port;
+    }
+    builder.Services.AddHttpsRedirection(options => options.HttpsPort = httpsPort);
 }
 builder.Services.AddHostedService<PgNotifications>();
 var auth = builder.Services.AddAuthentication(o => { o.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme; o.DefaultChallengeScheme = CookieAuthenticationDefaults.AuthenticationScheme; });
@@ -94,13 +125,14 @@ builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 8_000_000);
 var app = builder.Build();
 if (!demo)
 {
-    app.UseForwardedHeaders();
+    if (!directHttps) app.UseForwardedHeaders();
     app.UseWhen(context => !context.Request.Path.StartsWithSegments("/health"), branch => branch.UseHttpsRedirection());
     app.UseHsts();
 }
 app.Use(async (context, next) => { try { await next(); } catch (BusinessException e) { context.Response.StatusCode = e.Status; await context.Response.WriteAsJsonAsync(new { code = e.Message, requestId = context.TraceIdentifier }); } catch (DbUpdateConcurrencyException) { context.Response.StatusCode = 409; await context.Response.WriteAsJsonAsync(new { code = "conflict", requestId = context.TraceIdentifier }); } catch (AntiforgeryValidationException) { context.Response.StatusCode = 400; await context.Response.WriteAsJsonAsync(new { code = "csrf", requestId = context.TraceIdentifier }); } });
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.Use(async (context, next) =>
 {
     if (HttpMethods.IsPost(context.Request.Method) && context.Request.Path.StartsWithSegments("/api") && context.Request.Path != "/api/logout" && context.Request.Path != "/api/dev/login")
@@ -110,6 +142,7 @@ app.Use(async (context, next) =>
 app.Use(async (context, next) => { if (context.Request.Path.StartsWithSegments("/api")) { context.Response.Headers.CacheControl = "no-store"; if (HttpMethods.IsPost(context.Request.Method) && context.Request.Path != "/api/rfid/observations" && !context.Request.Path.StartsWithSegments("/api/erp")) await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context); } await next(); });
 app.MapGet("/health/live", () => Results.Ok(new { status = "up" }));
 app.MapGet("/health/ready", async (WmsDb db, CancellationToken ct) => await db.Database.CanConnectAsync(ct) && await db.Settings.AnyAsync(ct) && await db.Warehouses.AnyAsync(w => w.Id != "transit", ct) ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503));
+app.MapSettings();
 app.MapGet("/api/session", async (HttpContext context, IAntiforgery csrf, AccessService access, CancellationToken ct) =>
 {
     var token = csrf.GetAndStoreTokens(context);
@@ -132,12 +165,18 @@ if (demo)
         var principal = await db.Principals.SingleAsync(p => p.Id == account, ct);
         Rules.Require(principal.Status == "active", "account-unavailable", 403);
         var claims = new[] { new Claim("sub", principal.Subject), new Claim("iss", principal.Issuer), new Claim("name", principal.Name) };
-        await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
+        var rememberMe = payload.TryGetProperty("rememberMe", out var remember) && remember.ValueKind == JsonValueKind.True;
+        await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)), LoginSession.Properties(rememberMe));
         return Results.NoContent();
-    });
+    }).RequireRateLimiting(LoginRateLimits.Policy);
     app.MapPost("/api/dev/verify-email", async (JsonElement payload, WmsDb db, CancellationToken ct) => { var principal = await db.Principals.FirstOrDefaultAsync(p => p.Email == payload.Text("email") && p.Status == "pending", ct); if (principal is not null) { principal.Verified = true; await db.SaveChangesAsync(ct); } return Results.NoContent(); });
 }
-app.MapGet("/auth/login", () => Results.Challenge(new AuthenticationProperties { RedirectUri = "/" }, [OpenIdConnectDefaults.AuthenticationScheme]));
+app.MapGet("/auth/login", (bool? rememberMe) =>
+{
+    var properties = LoginSession.Properties(rememberMe == true);
+    properties.RedirectUri = "/";
+    return Results.Challenge(properties, [OpenIdConnectDefaults.AuthenticationScheme]);
+}).RequireRateLimiting(LoginRateLimits.Policy);
 app.MapPost("/api/logout", async (HttpContext context) => { await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme); return Results.NoContent(); });
 app.MapPost("/api/access/request", async (JsonElement payload, WmsDb db, CancellationToken ct) =>
 {
@@ -145,9 +184,11 @@ app.MapPost("/api/access/request", async (JsonElement payload, WmsDb db, Cancell
     var name = payload.Text("name").Trim();
     Rules.Require(email.Length is > 3 and < 254 && email.Contains('@') && name.Length is > 0 and < 200, "required", 400);
     await using var transaction = await db.Database.BeginTransactionAsync(ct);
-    await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:users"}, 0))", ct);
+    var acquired = await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_xact_lock(hashtextextended({"edit:demo:users"}, 0)) AS \"Value\"").SingleAsync(ct);
+    Rules.Require(acquired, "enrollment-busy", 429);
     if (!await db.Principals.AnyAsync(p => p.Email.ToLower() == email, ct))
     {
+        await EnrollmentLimits.RequireCapacity(db, ct);
         var id = Guid.NewGuid().ToString("N");
         db.Principals.Add(new Principal { Id = id, Subject = $"request:{id}", Issuer = "access-request", Email = email, Name = name, Status = "pending" });
         await db.SaveChangesAsync(ct);
@@ -157,7 +198,7 @@ app.MapPost("/api/access/request", async (JsonElement payload, WmsDb db, Cancell
     {
         message = "request-received"
     });
-});
+}).RequireRateLimiting("enrollment");
 app.MapGet("/api/workspaces/{warehouse}/snapshot", async (string warehouse, [AsParameters] WorkspaceQuery input, HttpContext context, AccessService access, SnapshotQuery query, CancellationToken ct) => { var actor = await access.Resolve(context.User, warehouse, ct); return Results.Ok(await query.Read(actor, ct, input)); }).RequireAuthorization();
 if (erpIngressEnabled)
     app.MapPost("/api/erp/workspaces/{warehouse}/purchase-orders", async (string warehouse, PurchaseOrderMessage input, HttpContext context, AccessService access, PurchaseOrderImport importer, IHubContext<WorkspaceHub> hub, CancellationToken ct) =>
@@ -264,5 +305,25 @@ if (migrateOnly || args.Contains("--migrate", StringComparer.Ordinal) || builder
         await Seed.Demo(db);
 }
 if (migrateOnly) return;
+if (builder.Configuration.GetValue<bool>("Hosting:ServeFrontend"))
+{
+    app.UseStaticFiles();
+    app.MapFallback("{*path:nonfile}", async context =>
+    {
+        var reserved = new[] { "/api", "/auth", "/health", "/hubs", "/signin-oidc", "/signout-callback-oidc" };
+        if (!HttpMethods.IsGet(context.Request.Method) && !HttpMethods.IsHead(context.Request.Method) ||
+            reserved.Any(prefix => context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            context.Response.StatusCode = 404;
+            return;
+        }
+        var index = app.Environment.WebRootFileProvider.GetFileInfo("index.html");
+        if (!index.Exists) { context.Response.StatusCode = 404; return; }
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-cache";
+        if (!HttpMethods.IsHead(context.Request.Method))
+            await context.Response.SendFileAsync(index, context.RequestAborted);
+    });
+}
 app.Run();
 public partial class Program;

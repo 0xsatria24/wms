@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { matchSuggestions, type Suggestion } from "./autocomplete-model";
+import { Reference } from "./Reference";
 
 interface Props extends React.InputHTMLAttributes<HTMLInputElement> {
   suggestions: Suggestion[];
@@ -173,8 +174,8 @@ export function AutocompleteInput({
                   onPointerDown={(event) => event.preventDefault()}
                   onClick={() => choose(option)}
                 >
-                  <span>{option.label}</span>
-                  {option.description && <small>{option.description}</small>}
+                  <span><Reference value={option.label} embedded /></span>
+                  {option.description && <small><Reference value={option.description} embedded /></small>}
                 </div>
               ))}
             </div>

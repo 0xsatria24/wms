@@ -7,6 +7,7 @@ Implementasi pilot Inventory + WMS menggunakan **ASP.NET Core 10 + EF Core/Npgsq
 - [Frontend dan sumber mockup aktif](prototype/README.md)
 - [Solusi .NET](InventoryWms.sln)
 - [Konfigurasi Docker Compose untuk server Linux](compose.yaml)
+- [Opsi installer lokal Windows dengan SSO](docs/implementation/windows-local.md)
 
 Data pengembangan merupakan simulasi. SSO perusahaan, ERP dan reader fisik memerlukan konfigurasi klien. UAT operasional belum dijalankan. HTML katalog lama telah dihapus; aplikasi baru berada di `prototype/` dan `backend/`.
 

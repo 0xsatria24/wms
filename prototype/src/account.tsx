@@ -24,6 +24,7 @@ export function Auth({
     confirm: "",
   });
   const [show, setShow] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
   const [sending, setSending] = useState(false);
@@ -47,7 +48,7 @@ export function Auth({
     setTimeout(async () => {
       if (route === "signin") {
         try {
-          await signIn(form.email, form.password);
+          await signIn(form.email, form.password, rememberMe);
         } catch (error) {
           setError(
             error.code === "credentials"
@@ -55,7 +56,7 @@ export function Auth({
                   "Email or password is incorrect.",
                   "Email atau password belum benar.",
                 )
-              : error.code === "account-unavailable"
+              : ["account-unavailable", "login-rate-limit"].includes(error.code)
                 ? errorText(error.code, t)
                 : t(
                     "Unable to sign in. Check that the API and database are running.",
@@ -100,6 +101,27 @@ export function Auth({
   const login = route === "signin";
   const registering = route === "register";
   const forgot = route === "forgot";
+  const rememberMeOption = (
+    <div>
+      <label className="checkbox-label">
+        <input
+          type="checkbox"
+          name="rememberMe"
+          checked={rememberMe}
+          disabled={sending}
+          onChange={(e) => setRememberMe(e.target.checked)}
+          aria-describedby="remember-me-help"
+        />
+        {t("Remember me", "Ingat saya")}
+      </label>
+      <p id="remember-me-help" className="muted">
+        {t(
+          "Stay signed in for up to 14 days. Use only on your own device.",
+          "Tetap masuk hingga 14 hari. Gunakan hanya di perangkat pribadi.",
+        )}
+      </p>
+    </div>
+  );
   return (
     <div className="auth-page">
       <header className="auth-top">
@@ -155,7 +177,8 @@ export function Auth({
                   "Login dan pemulihan password memakai penyedia identitas perusahaan.",
                 )}
               </Notice>
-              <a className="button primary" href="/auth/login">
+              {rememberMeOption}
+              <a className="button primary" href={`/auth/login?rememberMe=${rememberMe}`}>
                 {t("Continue with company SSO", "Lanjut dengan SSO perusahaan")}
               </a>
             </div>
@@ -305,6 +328,7 @@ export function Auth({
                   </label>
                 </>
               )}
+              {login && rememberMeOption}
               <Button type="submit" primary disabled={sending}>
                 {sending
                   ? t("Please wait…", "Tunggu sebentar…")
@@ -458,7 +482,7 @@ export function Workspace({ user, warehouse, setWarehouse, data, go, companyName
     </section>
   );
 }
-export function Settings({
+export function DemoScenarios({
   user,
   setUser,
   data,
@@ -469,32 +493,10 @@ export function Settings({
   setMode,
   lang,
   authMode,
-}) {
+}: any) {
   const t = useText();
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h1>{t("Settings", "Pengaturan")}</h1>
-          <p>
-            {t(
-              "Appearance and local demonstration controls.",
-              "Tampilan dan kontrol demonstrasi lokal.",
-            )}
-          </p>
-        </div>
-      </div>
-      <div className="settings-grid">
-        <section className="panel stack">
-          <h2>{t("Appearance", "Tampilan")}</h2>
-          {lang}
-          <Field label={t("Theme", "Tema")}>
-            <select value={theme} onChange={(e) => setTheme(e.target.value)}>
-              <option value="light">{t("Light", "Terang")}</option>
-              <option value="dark">{t("Dark", "Gelap")}</option>
-            </select>
-          </Field>
-        </section>
         {authMode === "development-demo" && (
           <section className="panel stack">
             <h2>{t("Demo scenarios", "Skenario demo")}</h2>
@@ -547,6 +549,7 @@ export function Settings({
               <input
                 type="checkbox"
                 checked={data.partialAllowed}
+                disabled={user.role !== "admin"}
                 onChange={(e) =>
                   setData({ ...data, partialAllowed: e.target.checked })
                 }
@@ -564,7 +567,6 @@ export function Settings({
             </small>
           </section>
         )}
-      </div>
     </>
   );
 }

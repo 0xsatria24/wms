@@ -54,6 +54,7 @@ public static class SsoEnrollment
             existing = matches.SingleOrDefault();
             if (existing is null)
             {
+                await EnrollmentLimits.RequireCapacity(db, ct);
                 existing = new Principal { Id = Guid.NewGuid().ToString("N"), Email = email, Name = principal.FindFirstValue("name") ?? "SSO account", Status = "pending" };
                 db.Principals.Add(existing);
             }

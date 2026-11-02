@@ -2,6 +2,7 @@
 .runtime/
 **/node_modules/
 **/dist/
+outputs/windows-local/
 **/bin/
 **/obj/
 **/TestResults/

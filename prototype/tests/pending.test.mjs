@@ -2,6 +2,7 @@ import "fake-indexeddb/auto";
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 import { pending, retryOriginal, send, session } from "../src/api.ts";
+import * as api from "../src/api.ts";
 
 Object.defineProperty(globalThis, "navigator", {
   value: { onLine: true },
@@ -70,6 +71,58 @@ test("offline capture makes no POST and retries with the original identity, scop
   await retryOriginal(row, user, body.warehouse);
   assert.deepEqual(posts, [{ key, body }]);
   assert.deepEqual(await pending(), []);
+});
+
+test("checking an unknown result only reads its scoped receipt and retains it when absent", async () => {
+  const key = crypto.randomUUID();
+  await send(key, body, user.id, "unknown");
+  const [row] = await pending();
+  let reads = 0;
+  globalThis.fetch = async (path, options) => {
+    assert.equal(path, `/api/requests/receive/${key}?warehouse=Main%20Warehouse`);
+    assert.equal(options.method, 'GET');
+    reads++;
+    return json({ code: 'not-found' }, 404);
+  };
+  assert.equal((await api.checkOriginal(row, user, body.warehouse)).message, 'unknown');
+  assert.equal(reads, 1);
+  assert.deepEqual(await pending(), [row]);
+  globalThis.fetch = async (_, options) => {
+    assert.equal(options.method, 'GET');
+    return json({ id: 'TX-TEST', message: 'recorded' });
+  };
+  assert.equal((await api.checkOriginal(row, user, body.warehouse)).id, 'TX-TEST');
+  assert.deepEqual(await pending(), []);
+});
+
+test("a previously unknown request never becomes unsent when retrying offline", async () => {
+  const key = crypto.randomUUID();
+  await send(key, body, user.id, 'unknown');
+  navigator.onLine = false;
+  try {
+    assert.equal((await retryOriginal((await pending())[0], user, body.warehouse)).message, 'unknown');
+    assert.equal((await pending())[0].status, 'unknown');
+  } finally { navigator.onLine = true; }
+});
+
+test("retry retains the first device capture time when the result remains unknown", async () => {
+  const key = crypto.randomUUID();
+  await send(key, body, user.id, "offline");
+  const row = (await pending())[0];
+  row.created = "2026-01-01T00:00:00.000Z";
+  await new Promise((resolve, reject) => {
+    const open = indexedDB.open("inventory-wms-pending", 1);
+    open.onsuccess = () => {
+      const db = open.result; const tx = db.transaction("requests", "readwrite");
+      tx.objectStore("requests").put(row);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    };
+    open.onerror = () => reject(open.error);
+  });
+  await send(key, body, user.id, "unknown");
+  assert.equal((await pending())[0].created, row.created);
+  assert.equal(posts[0].body.occurredAt, body.occurredAt);
 });
 
 test("lost response, server failure and revoked access retain the same unresolved request until a known result", async () => {

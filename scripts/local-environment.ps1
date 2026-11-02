@@ -17,6 +17,11 @@ $dotnetPath = Join-Path $projectRoot '.tools\dotnet\dotnet.exe'
 if (-not (Test-Path -LiteralPath $dotnetPath)) { $dotnetPath = (Get-Command dotnet -ErrorAction Stop).Source }
 $postgresBin = 'C:\Program Files\PostgreSQL\18\bin'
 $postgresData = [IO.Path]::GetFullPath((Join-Path $runtimePath 'pgdata'))
-if (-not $postgresData.StartsWith($runtimePath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'The development database must remain inside the project runtime directory.'
+$postgresDataPathFile = Join-Path $runtimePath 'postgres-data-path.txt'
+if (Test-Path -LiteralPath $postgresDataPathFile) {
+    $configuredDataPath = (Get-Content -LiteralPath $postgresDataPathFile -Raw).Trim()
+    if (-not [IO.Path]::IsPathRooted($configuredDataPath)) {
+        throw 'postgres-data-path.txt must contain an absolute local PostgreSQL data directory.'
+    }
+    $postgresData = [IO.Path]::GetFullPath($configuredDataPath)
 }

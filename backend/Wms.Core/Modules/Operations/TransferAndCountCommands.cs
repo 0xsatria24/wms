@@ -116,7 +116,7 @@ public sealed partial class CommandProcessor
                 count.Status = "counting";
                 break;
             case "adjust-count":
-                Supervisor(actor);
+                Reviewer(approvalSettings.CountReview);
                 Require(count.Status == "review" && count.Counter != actor.Id, "approval", 403);
                 Require(!string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
                 Require(count.Counted.HasValue && count.Counted >= pos.Committed && pos.OnHand == count.Expected, "count-conflict");

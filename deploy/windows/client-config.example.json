@@ -1,0 +1,22 @@
+{
+  "PostgreSqlService": "postgresql-x64-18",
+  "PostgreSqlBin": "C:\\Program Files\\PostgreSQL\\18\\bin",
+  "ConnectionStrings": { "Wms": "Host=127.0.0.1;Port=5432;Database=wms;Username=wms;Password=REPLACE_ME" },
+  "Company": { "Name": "REPLACE_ME" },
+  "Oidc": { "Authority": "https://identity.example.com", "ClientId": "REPLACE_ME", "ClientSecret": "REPLACE_ME" },
+  "Kestrel": {
+    "Endpoints": {
+      "Https": {
+        "Url": "https://localhost:5443",
+        "Certificate": { "Path": "C:\\WmsProvisioning\\localhost.pfx", "Password": "REPLACE_ME" }
+      }
+    }
+  },
+  "AllowedHosts": "localhost",
+  "Hosting": { "DirectHttps": true, "ServeFrontend": true },
+  "DataProtection": { "KeyPath": "C:\\ProgramData\\InventoryWms\\keys" },
+  "Database": { "MigrateOnStartup": false },
+  "Development": { "EnableDemoAuth": false, "SeedDemo": false },
+  "Erp": { "Enabled": false, "DispatchPaused": true },
+  "Logging": { "LogLevel": { "Default": "Information", "Microsoft.AspNetCore": "Warning", "Microsoft.EntityFrameworkCore.Database.Command": "Warning" } }
+}
