@@ -80,8 +80,11 @@ public static class SettingsEndpoints
         var (details, version) = await OperationalSettings.Read(db, "warehouse", actor.WarehouseId, new WarehouseDetails(), ct);
         var (approvals, approvalVersion) = await OperationalSettings.Read(db, "approvals", actor.WarehouseId, new ApprovalSettings(), ct);
         var name = await db.Warehouses.Where(w => w.Id == actor.WarehouseId).Select(w => w.Name).SingleAsync(ct);
+        var (company, companyVersion) = await OperationalSettings.Read(db, "company", "demo", new OrganizationProfile(), ct);
+        var canConfigureCompany = actor.Role == "admin" && !await db.Warehouses.AnyAsync(w => w.CompanyId == "demo" && w.Id != "transit" && !db.AccessGrants.Any(g => g.PrincipalId == actor.Id && g.WarehouseId == w.Id && g.Role == "admin"), ct);
         return new
         {
+            company = new { name = company.Name, version = companyVersion, canConfigure = canConfigureCompany },
             warehouse = new { id = actor.WarehouseId, name, details.Address, details.TimeZone, version },
             approvals = new { approvals.OrderReview, approvals.CountReview, version = approvalVersion },
             locations = await db.Locations.Where(l => l.WarehouseId == actor.WarehouseId).OrderBy(l => l.Code).Select(l => new { l.Code, l.Pickable, l.Frozen }).ToArrayAsync(ct),

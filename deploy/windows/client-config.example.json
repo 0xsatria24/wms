@@ -5,6 +5,7 @@
   "Company": { "Name": "REPLACE_ME" },
   "Setup": { "Enabled": false, "CodeHash": "", "ExpiresAt": "", "Warehouse": { "Id": "", "Name": "", "StorageLocations": [] } },
   "Oidc": { "Authority": "https://identity.example.com", "ClientId": "REPLACE_ME", "ClientSecret": "REPLACE_ME" },
+  "IdentityProvisioning": { "ClientId": "", "ClientSecret": "", "ReturnUrl": "" },
   "Kestrel": {
     "Endpoints": {
       "Https": {

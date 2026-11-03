@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Cube } from "@phosphor-icons/react";
 import { MAIN } from "./fixtures";
+import { PasswordRecoveryForm } from "./PasswordRecoveryForm";
 import { useText, Button, Field, Notice, Summary, errorText } from "./ui.tsx";
 
 export function Auth({
@@ -100,7 +101,7 @@ export function Auth({
   };
   const login = route === "signin";
   const registering = route === "register";
-  const forgot = route === "forgot";
+  const forgot = route === "forgot" || authMode === "oidc" && route === "reset";
   const rememberMeOption = (
     <div>
       <label className="checkbox-label">
@@ -169,18 +170,20 @@ export function Auth({
                   : t("Reset your password", "Reset password kamu")}
           </h2>
           {notice && <Notice kind={notice.kind}>{notice.message}</Notice>}
-          {authMode === "oidc" ? (
+          {authMode === "oidc" && (forgot || route === "reset") ? <PasswordRecoveryForm go={go}/> : authMode === "oidc" && registering ? <div className="stack"><Notice>{t("Ask your administrator for an invitation. The email lets you verify your identity and set your own password; your warehouse access is included.", "Minta undangan dari admin. Email undangan digunakan untuk verifikasi identitas dan membuat password sendiri; akses gudang sudah disertakan.")}</Notice><Button onClick={() => go("signin")}>{t("Back to sign in", "Kembali ke login")}</Button></div> : authMode === "oidc" ? (
             <div className="stack">
               <Notice>
                 {t(
-                  "Enter your company credentials on the next screen. You can sign in with a different account.",
-                  "Masukkan akun perusahaan di halaman berikutnya. Kamu bisa masuk dengan akun lain.",
+                  "Use your company account. New users set their password from the invitation email.",
+                  "Gunakan akun perusahaan. User baru membuat password melalui email undangan.",
                 )}
               </Notice>
               {rememberMeOption}
               <a className="button primary" href={`/auth/login?rememberMe=${rememberMe}`}>
                 {t("Continue with company SSO", "Lanjut dengan SSO perusahaan")}
               </a>
+              <a href="#forgot">{t("Forgot password?", "Lupa password?")}</a>
+              <a href="#register">{t("Need an account?", "Butuh akun?")}</a>
             </div>
           ) : done ? (
             <div className="stack">

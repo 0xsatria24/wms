@@ -84,6 +84,11 @@ public static class SsoEnrollment
                 existing = new Principal { Id = Guid.NewGuid().ToString("N"), Email = email, Name = principal.FindFirstValue("name") ?? "SSO account", Status = "pending" };
                 db.Principals.Add(existing);
             }
+            if (!await AccountInvitations.Matches(db, existing.Id, issuer, subject, ct))
+            {
+                context.Fail("This identity does not match the account invitation. Contact your administrator.");
+                return;
+            }
             existing.Subject = subject;
             existing.Issuer = issuer;
             existing.Verified = true;
@@ -94,6 +99,8 @@ public static class SsoEnrollment
             existing.Verified = true;
             await db.SaveChangesAsync(ct);
         }
+        if (Verified(principal) && string.Equals(existing.Email, principal.FindFirstValue("email")?.Trim(), StringComparison.OrdinalIgnoreCase))
+            await AccountInvitations.Accept(db, existing, ct);
         await transaction.CommitAsync(ct);
     }
 }

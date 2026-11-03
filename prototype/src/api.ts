@@ -11,6 +11,8 @@ export interface SessionUser {
   verified: boolean;
 }
 export interface Session {
+  organizationConfigured?: boolean;
+  organizationWarehouse?: string;
   companyName?: string;
   mode: "development-demo" | "oidc";
   csrfToken: string;
@@ -56,6 +58,7 @@ export const defaultPreferences: UserPreferences = { version: 0, language: "en",
 export const preferences = () => request<UserPreferences>("/api/preferences");
 export const savePreferences = (value: UserPreferences) => request<UserPreferences>("/api/preferences", value);
 export const warehouseSettings = (warehouse: string) => request<any>(`/api/workspaces/${encodeURIComponent(warehouse)}/settings`);
+export const saveOrganization = (input: unknown) => request<any>("/api/organization", input);
 export const saveWarehouseSettings = (warehouse: string, section: string, value: unknown) => request<any>(`/api/workspaces/${encodeURIComponent(warehouse)}/settings/${section}`, value);
 export const addStorageLocation = (warehouse: string, name: string) => request("/api/edit", { type: "locationMaster", warehouse, payload: { name, pickable: true } });
 let csrf = "";
@@ -155,6 +158,17 @@ export async function createUser(
     payload: { name, email, reason },
   });
 }
+export interface AccountInviteInput {
+  name: string; email: string; role: string; warehouses: string[]; reason: string;
+}
+export interface AccountInvitation extends AccountInviteInput {
+  id: string; state: "preparing" | "sent" | "unknown" | "failed" | "expired" | "accepted" | "cancelled" | "blocked"; expiresAt: string;
+}
+export const inviteAccount = (warehouse: string, id: string, input: AccountInviteInput, resend = false) =>
+  request<AccountInvitation>(`/api/workspaces/${encodeURIComponent(warehouse)}/invitations/${encodeURIComponent(id)}`, { ...input, resend });
+export const accountInvitation = (warehouse: string, id: string) =>
+  request<AccountInvitation>(`/api/workspaces/${encodeURIComponent(warehouse)}/invitations/${encodeURIComponent(id)}`);
+export const recoverPassword = (email: string) => request("/api/accounts/recovery", { email });
 export async function deleteUser(
   warehouse: string,
   id: string,

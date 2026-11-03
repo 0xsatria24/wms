@@ -14,6 +14,7 @@ import { BulkActions } from "./BulkActions";
 import { canAccessAction } from "./bulk-model";
 import { downloadLabelSheet } from "./bulk-files";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
+import { AccountInviteForm } from "./AccountInviteForm";
 import { MAIN, locations } from "./fixtures";
 import {
   useText,
@@ -34,7 +35,7 @@ import {
 } from "./ui.tsx";
 export { Controls } from "./controls.tsx";
 
-export function Access({ data, setData, user, flash, createUser, deleteUser, setCatalogueQuery, warehouse, editRecord, refresh }) {
+export function Access({ data, setData, user, flash, createUser, deleteUser, setCatalogueQuery, warehouse, editRecord, refresh, inviteAccount, accountInvitation }) {
   const t = useText();
   const [tab, setTab] = useState("users");
   const [selected, setSelected] = useState(null);
@@ -42,6 +43,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
   const [warehouses, setWarehouses] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [userAction, setUserAction] = useState(null);
+  useEffect(() => { setUserAction(null); setSelected(null); }, [user.id, warehouse, user.role]);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [actionReason, setActionReason] = useState("");
@@ -159,8 +161,8 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
           [
             "pending",
             t(
-              `Pending approvals (${pendingTotal})`,
-              `Menunggu persetujuan (${pendingTotal})`,
+              `${inviteAccount ? "Pending accounts" : "Pending approvals"} (${pendingTotal})`,
+              `${inviteAccount ? "Akun menunggu" : "Menunggu persetujuan"} (${pendingTotal})`,
             ),
           ],
         ]}
@@ -213,6 +215,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
             label: t("Actions", "Tindakan"),
             render: (u) => (
               <div className="user-actions">
+                {inviteAccount && u.invitationId && u.status === "pending" && <Button disabled={actionBusy || loadingUsers} onClick={() => setUserAction({ target: null, invitationId: u.invitationId })}>{t("Invitation", "Undangan")}</Button>}
                 <Button
                   disabled={u.id === user.id || actionBusy || loadingUsers}
                   onClick={() => open(u)}
@@ -241,8 +244,8 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
       )}
       <Notice>
         {t(
-          "Registration requests access; it does not grant an administrator role. Production authorization is not connected in this preview.",
-          "Pendaftaran mengajukan akses; tidak memberikan peran admin. Otorisasi produksi belum terhubung pada preview ini.",
+          "Invited users receive the role and warehouses approved by the administrator after verified sign-in. Other access requests require review.",
+          "User undangan menerima peran dan gudang yang disetujui admin setelah login terverifikasi. Permintaan akses lain perlu ditinjau.",
         )}{" "}
         {t(
           "You cannot delete your own account.",
@@ -337,7 +340,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
           </div>
         </Modal>
       )}
-      {userAction && (
+      {userAction && !userAction.target && inviteAccount ? <Modal title={t("Invite user", "Undang user")} onClose={() => setUserAction(null)}><AccountInviteForm key={userAction.invitationId || "new"} invitationId={userAction.invitationId} user={user} warehouse={warehouse} send={inviteAccount} check={accountInvitation} close={() => setUserAction(null)}/></Modal> : userAction && (
         <Modal
           title={
             userAction.target

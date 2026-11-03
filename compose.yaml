@@ -22,6 +22,9 @@ services:
       Oidc__Authority: ${OIDC_AUTHORITY:?Set OIDC_AUTHORITY}
       Oidc__ClientId: ${OIDC_CLIENT_ID:?Set OIDC_CLIENT_ID}
       Oidc__ClientSecret: ${OIDC_CLIENT_SECRET}
+      IdentityProvisioning__ClientId: ${WMS_IDENTITY_CLIENT_ID:-}
+      IdentityProvisioning__ClientSecret: ${WMS_IDENTITY_CLIENT_SECRET:-}
+      IdentityProvisioning__ReturnUrl: ${WMS_IDENTITY_RETURN_URL:-}
       AllowedHosts: ${WMS_PUBLIC_HOST:?Set WMS_PUBLIC_HOST};localhost;127.0.0.1;api
       ReverseProxy__KnownProxies: ${WEB_PROXY_IP:-172.30.64.10}
       DataProtection__KeyPath: /var/wms/keys

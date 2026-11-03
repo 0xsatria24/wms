@@ -44,6 +44,8 @@ var connection = builder.Configuration.GetConnectionString("Wms") ?? throw new I
 builder.Services.AddDbContext<WmsDb>(o => o.UseNpgsql(connection));
 builder.Services.AddScoped<AccessService>();
 builder.Services.AddScoped<SetupService>();
+builder.Services.AddHttpClient<IAccountIdentity, KeycloakAccounts>(client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddScoped<AccountInvitations>();
 builder.Services.AddScoped<CommandProcessor>();
 builder.Services.AddScoped<SnapshotQuery>();
 builder.Services.AddScoped<EditService>();
@@ -145,6 +147,8 @@ app.Use(async (context, next) => { if (context.Request.Path.StartsWithSegments("
 app.MapGet("/health/live", () => Results.Ok(new { status = "up" }));
 app.MapGet("/health/ready", async (WmsDb db, CancellationToken ct) => await db.Database.CanConnectAsync(ct) && await db.Settings.AnyAsync(ct) && await db.Warehouses.AnyAsync(w => w.Id != "transit", ct) ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503));
 app.MapSettings();
+app.MapOrganization();
+app.MapAccounts();
 app.MapGet("/health/setup-ready", async (WmsDb db, SetupService setup, CancellationToken ct) => {
     try {
         if ((await db.Database.GetPendingMigrationsAsync(ct)).Any()) return Results.StatusCode(503);
@@ -153,14 +157,17 @@ app.MapGet("/health/setup-ready", async (WmsDb db, SetupService setup, Cancellat
     } catch (Npgsql.NpgsqlException) { return Results.StatusCode(503); }
 });
 if (!demo) app.MapSetup();
-app.MapGet("/api/session", async (HttpContext context, IAntiforgery csrf, AccessService access, CancellationToken ct) =>
+app.MapGet("/api/session", async (HttpContext context, IAntiforgery csrf, AccessService access, WmsDb db, CancellationToken ct) =>
 {
     var token = csrf.GetAndStoreTokens(context);
     var principal = await access.Principal(context.User, ct);
+    var (organization, organizationVersion) = await OperationalSettings.Read(db, "company", "demo", new OrganizationProfile(), ct);
     return Results.Ok(new
     {
         mode = demo ? "development-demo" : "oidc",
-        companyName = builder.Configuration["Company:Name"] ?? (demo ? "Demo Company" : "Inventory / WMS"),
+        companyName = organization.Name.Length > 0 ? organization.Name : builder.Configuration["Company:Name"] ?? (demo ? "Demo Company" : "Inventory / WMS"),
+        organizationConfigured = organizationVersion > 0,
+        organizationWarehouse = organization.WarehouseName,
         csrfToken = token.RequestToken,
         user = principal is null ? null : await access.User(principal, ct)
     });

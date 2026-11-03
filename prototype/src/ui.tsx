@@ -507,6 +507,8 @@ export function DownloadButton({ filename, rows, children }) {
 }
 export function errorText(code, t) {
   const messages = {
+    "identity-not-configured": ["Account email services are not configured. Ask IT to configure invitations and password recovery.", "Layanan email akun belum dikonfigurasi. Minta IT mengatur undangan dan pemulihan password."],
+    "recovery-unavailable": ["Password recovery is unavailable. Contact IT or try again later.", "Pemulihan password belum tersedia. Hubungi IT atau coba lagi nanti."],
     "login-rate-limit": [
       "Too many sign-in attempts. Wait one minute before trying again.",
       "Terlalu banyak percobaan masuk. Tunggu satu menit sebelum mencoba lagi.",

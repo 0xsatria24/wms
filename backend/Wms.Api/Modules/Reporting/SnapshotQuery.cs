@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Wms.Infrastructure;
 using Wms.Shared;
 using Wms.Modules.Catalog;
+using Wms.Modules.Access;
 using static Wms.Shared.Rules;
 
 namespace Wms.Modules.Reporting;
@@ -58,10 +59,13 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
         var users = await usersQuery.OrderBy(p => p.Id).Skip((userPage - 1) * 25).Take(25).ToListAsync(ct);
         var userIds = users.Select(u => u.Id).ToArray();
         var grants = await db.AccessGrants.Where(g => userIds.Contains(g.PrincipalId)).ToListAsync(ct);
+        var invitationKeys = userIds.Select(id => AccountInvitations.Kind + "|" + id).ToArray();
+        var invitations = (await db.SupportingRecords.Where(r => r.Kind == AccountInvitations.Kind && invitationKeys.Contains(r.Id)).ToListAsync(ct))
+            .Select(AccountInvitations.Read).ToDictionary(i => i.PrincipalId);
         var userDtos = users.Select(user =>
         {
             var userGrants = grants.Where(g => g.PrincipalId == user.Id).ToArray();
-            return (object)new { id = user.Id, name = user.Name, email = user.Email, verified = user.Verified, status = user.Status, role = userGrants.FirstOrDefault()?.Role ?? "viewer", warehouses = userGrants.Select(g => warehouses[g.WarehouseId]).ToArray() };
+            return (object)new { id = user.Id, name = user.Name, email = user.Email, verified = user.Verified, status = user.Status, role = userGrants.FirstOrDefault()?.Role ?? "viewer", warehouses = userGrants.Select(g => warehouses[g.WarehouseId]).ToArray(), invitationId = invitations.GetValueOrDefault(user.Id)?.Id.ToString() };
         }).ToArray();
         var positionIds = positions.Select(p => p.Id).ToArray();
         var lastMovements = await (from entry in db.Entries

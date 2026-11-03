@@ -210,10 +210,10 @@ function Application({ locale, setLocale }) {
           replaceUser(session.user);
           const prefs = await loadPreferences(session.user.id);
           if (userRef.current?.id !== session.user.id) return;
-          const target = session.user.warehouses.includes(prefs.defaultWarehouse) ? prefs.defaultWarehouse : session.user.warehouses[0];
+          const target = session.user.warehouses.includes(prefs.defaultWarehouse) ? prefs.defaultWarehouse : session.user.warehouses.includes(session.organizationWarehouse) ? session.organizationWarehouse : session.user.warehouses[0];
           setWarehouse(target);
           if (target) await refresh(target, session.user.id);
-          go(prefs.startPage);
+          go(session.mode === "oidc" && session.organizationConfigured === false && session.user.role === "admin" ? "settings" : prefs.startPage);
         } else if (session.user)
           setNotice({
             kind: session.user.status === "pending" ? "warning" : "error",
@@ -511,6 +511,12 @@ function Application({ locale, setLocale }) {
         ),
       });
     },
+    inviteAccount: authMode === "oidc" ? async (id: string, input: api.AccountInviteInput, resend = false) => {
+      const result = await api.inviteAccount(warehouse, id, input, resend);
+      await refresh();
+      return result;
+    } : undefined,
+    accountInvitation: (id: string) => api.accountInvitation(warehouse, id),
     deleteUser: async (id: string, reason: string) => {
       await api.deleteUser(warehouse, id, reason);
       await refresh();

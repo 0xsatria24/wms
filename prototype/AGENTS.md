@@ -1,5 +1,9 @@
 # Prototype Instructions
 
+- Organization setup, 3 November 2026: user approved a company/warehouse/storage-location form after first administrator login. Keep it in Settings → Company & warehouses, outside the activation/identity/review wizard. Persist company branding in the application. Create new warehouses and initial locations transactionally; preserve names/identities of existing operational warehouses.
+
+- Account flow, 3 November 2026: user approved WMS-managed invitations with Keycloak owning passwords. In OIDC mode, Add user captures name/email/role/warehouses once; verified sign-in activates only the stored, still-authorized invitation. Keep explicit status/check/resend, generic password-recovery responses, and EN/ID copy. Preserve the existing demo path. The low-risk public-enrollment quota finding is explicitly deferred; do not bundle its remediation into this work.
+
 - Admin wizard scope correction, 3 November 2026: only Activation, Administrator/SSO and Review remain (numbered 1–3). Do not show a warehouse/location form or warehouse summary in the wizard. Initial warehouse provisioning belongs to IT configuration; review only the verified administrator and company.
 
 - Admin setup wizard polish, 3 November 2026: the user rejected disorganized text and boxes. Keep a compact step navigation with a visible active step, aligned form/summary labels, restrained introductory copy, and clearly separated primary, back and status-check actions. Use Product Design, antislop during, and Impeccable for this refinement; preserve the approved setup flow and backend contracts.

@@ -20,7 +20,11 @@ export function Settings({
   ...demo
 }: any) {
   const t = useText();
-  const [tab, setTab] = useState("personal");
+  const [tab, setTab] = useState(user.role === "admin" ? "organization" : "personal");
+  const [companyName, setCompanyName] = useState("");
+  const [newWarehouse, setNewWarehouse] = useState("");
+  const [initialLocations, setInitialLocations] = useState("");
+  const [organizationReason, setOrganizationReason] = useState("");
   const [saved, setSaved] = useState<any>(null);
   const [personal, setPersonal] = useState(preferences);
   const [details, setDetails] = useState<any>(null);
@@ -43,6 +47,7 @@ export function Settings({
         api.preferences(),
       ]);
       setSaved(config);
+      setCompanyName(config.company?.name || "");
       setDetails(config.warehouse);
       setApprovals(config.approvals);
       setPersonal(prefs);
@@ -73,6 +78,7 @@ export function Settings({
     }
   };
   const tabs = [
+    ...(user.role === "admin" ? [["organization", t("Company & warehouses", "Perusahaan & gudang")]] : []),
     ["personal", t("Personal", "Pribadi")],
     ["warehouse", t("Warehouse & locations", "Gudang & lokasi")],
     ["rules", t("Transaction rules", "Aturan transaksi")],
@@ -144,6 +150,22 @@ export function Settings({
         </div>
       ) : (
         <fieldset className="settings-fields" disabled={!!busy} aria-label={t("Settings form", "Formulir pengaturan")}>
+          {tab === "organization" && <form className="panel stack settings-form" onSubmit={event => {
+            event.preventDefault(); void execute("organization", async () => {
+              await api.saveOrganization({ version: saved.company.version, companyName, warehouseName: newWarehouse, locations: initialLocations.split(/[,\n]/).map(value => value.trim()).filter(Boolean), reason: organizationReason });
+              window.location.assign("/#settings"); window.location.reload();
+            });
+          }}>
+            <h2>{t("Company and warehouse setup", "Pengaturan perusahaan dan gudang")}</h2>
+            <p>{t("Enter your company name and add a warehouse with its storage locations. Manage additional locations in Warehouse & locations.", "Isi nama perusahaan dan tambahkan gudang beserta lokasi penyimpanannya. Lokasi tambahan dikelola di Gudang & lokasi.")}</p>
+            {!saved.company?.canConfigure && <Notice>{t("Company setup requires administrator access to every warehouse.", "Pengaturan perusahaan memerlukan akses admin ke seluruh gudang.")}</Notice>}
+            <Field label={t("Company name", "Nama perusahaan")} required maxLength={200} value={companyName} disabled={!saved.company?.canConfigure || locked} onChange={event => setCompanyName(event.target.value)}/>
+            <Field label={t("New warehouse name", "Nama gudang baru")} required maxLength={200} value={newWarehouse} disabled={!saved.company?.canConfigure || locked} onChange={event => setNewWarehouse(event.target.value)}/>
+            <Field label={t("Storage locations", "Lokasi penyimpanan")}><textarea required value={initialLocations} disabled={!saved.company?.canConfigure || locked} onChange={event => setInitialLocations(event.target.value)} aria-describedby="initial-locations-help"/></Field>
+            <p id="initial-locations-help" className="muted">{t("One code per line, or separate codes with commas. Receiving, QC and Staging are created automatically.", "Satu kode per baris, atau pisahkan dengan koma. Receiving, QC, dan Staging dibuat otomatis.")}</p>
+            <Field label={t("Reason for change", "Alasan perubahan")} required maxLength={2000} value={organizationReason} disabled={!saved.company?.canConfigure || locked} onChange={event => setOrganizationReason(event.target.value)}/>
+            <Button primary type="submit" disabled={!saved.company?.canConfigure || locked}>{t("Save company and add warehouse", "Simpan perusahaan dan tambah gudang")}</Button>
+          </form>}
           {tab === "personal" && (
             <form
               className="panel stack settings-form"
