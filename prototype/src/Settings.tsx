@@ -160,11 +160,12 @@ export function Settings({
             <p>{t("Enter your company name and add a warehouse with its storage locations. Manage additional locations in Warehouse & locations.", "Isi nama perusahaan dan tambahkan gudang beserta lokasi penyimpanannya. Lokasi tambahan dikelola di Gudang & lokasi.")}</p>
             {!saved.company?.canConfigure && <Notice>{t("Company setup requires administrator access to every warehouse.", "Pengaturan perusahaan memerlukan akses admin ke seluruh gudang.")}</Notice>}
             <Field label={t("Company name", "Nama perusahaan")} required maxLength={200} value={companyName} disabled={!saved.company?.canConfigure || locked} onChange={event => setCompanyName(event.target.value)}/>
-            <Field label={t("New warehouse name", "Nama gudang baru")} required maxLength={200} value={newWarehouse} disabled={!saved.company?.canConfigure || locked} onChange={event => setNewWarehouse(event.target.value)}/>
-            <Field label={t("Storage locations", "Lokasi penyimpanan")}><textarea required value={initialLocations} disabled={!saved.company?.canConfigure || locked} onChange={event => setInitialLocations(event.target.value)} aria-describedby="initial-locations-help"/></Field>
+            <Field label={t("New warehouse name", "Nama gudang baru")} required={saved.company.version === 0 || Boolean(initialLocations.trim())} maxLength={200} value={newWarehouse} disabled={!saved.company?.canConfigure || locked} onChange={event => setNewWarehouse(event.target.value)}/>
+            <Field label={t("Storage locations", "Lokasi penyimpanan")}><textarea required={saved.company.version === 0 || Boolean(newWarehouse.trim())} value={initialLocations} disabled={!saved.company?.canConfigure || locked} onChange={event => setInitialLocations(event.target.value)} aria-describedby="initial-locations-help"/></Field>
             <p id="initial-locations-help" className="muted">{t("One code per line, or separate codes with commas. Receiving, QC and Staging are created automatically.", "Satu kode per baris, atau pisahkan dengan koma. Receiving, QC, dan Staging dibuat otomatis.")}</p>
+            {saved.company.version > 0 && <p className="muted">{t("Leave warehouse and locations blank to update only the company name.", "Kosongkan gudang dan lokasi untuk mengubah nama perusahaan saja.")}</p>}
             <Field label={t("Reason for change", "Alasan perubahan")} required maxLength={2000} value={organizationReason} disabled={!saved.company?.canConfigure || locked} onChange={event => setOrganizationReason(event.target.value)}/>
-            <Button primary type="submit" disabled={!saved.company?.canConfigure || locked}>{t("Save company and add warehouse", "Simpan perusahaan dan tambah gudang")}</Button>
+            <Button primary type="submit" disabled={!saved.company?.canConfigure || locked}>{newWarehouse.trim() || saved.company.version === 0 ? t("Save company and add warehouse", "Simpan perusahaan dan tambah gudang") : t("Save company", "Simpan perusahaan")}</Button>
           </form>}
           {tab === "personal" && (
             <form
