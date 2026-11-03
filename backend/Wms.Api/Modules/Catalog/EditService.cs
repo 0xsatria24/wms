@@ -207,24 +207,27 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             var status = p.Text("status");
             Require(status is "active" or "rejected" or "revoked", "required", 400);
             Require(status != "active" || target!.Verified, "email-verification", 400);
-            var role = p.Text("role");
-            Require(role is "admin" or "supervisor" or "operator" or "viewer", "required", 400);
-            var requested = p.GetProperty("warehouses").EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
             var allowed = await db.AccessGrants.Where(g => g.PrincipalId == actor.Id && g.Role == "admin").Join(db.Warehouses, g => g.WarehouseId, w => w.Id, (g, w) => w).ToListAsync(ct);
-            Require(requested.Length > 0 && requested.All(name => allowed.Any(w => w.Name == name)), "scope", 403);
-            target!.Status = status;
             var existingGrants = await db.AccessGrants.Where(g => g.PrincipalId == id).ToListAsync(ct);
             Require(existingGrants.All(g => allowed.Any(w => w.Id == g.WarehouseId)), "user-scope", 403);
-            var desired = requested.Select(name => allowed.Single(w => w.Name == name).Id).ToArray();
-            foreach (var grant in existingGrants)
+            target!.Status = status;
+            if (status == "active")
             {
-                if (desired.Contains(grant.WarehouseId))
-                    grant.Role = role;
-                else
-                    db.AccessGrants.Remove(grant);
+                var role = p.Text("role");
+                Require(role is "admin" or "supervisor" or "operator" or "viewer", "required", 400);
+                var requested = p.GetProperty("warehouses").EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
+                Require(requested.Length > 0 && requested.All(name => allowed.Any(w => w.Name == name)), "scope", 403);
+                var desired = requested.Select(name => allowed.Single(w => w.Name == name).Id).ToArray();
+                foreach (var grant in existingGrants)
+                {
+                    if (desired.Contains(grant.WarehouseId))
+                        grant.Role = role;
+                    else
+                        db.AccessGrants.Remove(grant);
+                }
+                foreach (var wh in desired.Where(wh => !existingGrants.Any(g => g.WarehouseId == wh)))
+                    db.AccessGrants.Add(new AccessGrant { PrincipalId = id, WarehouseId = wh, Role = role });
             }
-            foreach (var wh in desired.Where(wh => !existingGrants.Any(g => g.WarehouseId == wh)))
-                db.AccessGrants.Add(new AccessGrant { PrincipalId = id, WarehouseId = wh, Role = role });
         }
         else if (request.Type == "create-order")
         {

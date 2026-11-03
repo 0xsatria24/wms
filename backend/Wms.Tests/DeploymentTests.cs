@@ -51,6 +51,7 @@ public sealed class DeploymentTests
         using var response = await client.GetAsync("/auth/login" + query);
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         var parameters = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(response.Headers.Location!.Query);
+        Assert.Equal("login", parameters["prompt"].ToString());
         var options = factory.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<OpenIdConnectOptions>>().Get(OpenIdConnectDefaults.AuthenticationScheme);
         var properties = options.StateDataFormat.Unprotect(parameters["state"]!);
         Assert.NotNull(properties);

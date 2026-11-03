@@ -8,10 +8,12 @@ namespace Wms.Modules.Access;
 
 public static class SsoEnrollment
 {
+    public const string ValidatedIssuer = "wms-validated-issuer";
     private static bool Verified(ClaimsPrincipal principal) => bool.TryParse(principal.FindFirstValue("email_verified"), out var verified) && verified;
     public static Task Validated(TokenValidatedContext context)
     {
         var identity = (ClaimsIdentity)context.Principal!.Identity!;
+        context.Properties!.Items[ValidatedIssuer] = context.SecurityToken.Issuer;
         if (!identity.HasClaim(c => c.Type == "iss"))
             identity.AddClaim(new Claim("iss", context.SecurityToken.Issuer));
         return Task.CompletedTask;
@@ -19,6 +21,13 @@ public static class SsoEnrollment
     public static async Task Ticket(TicketReceivedContext context)
     {
         var principal = context.Principal!;
+        // UserInfo claim actions remove iss; restore only the validated token issuer.
+        if (context.Properties?.Items.TryGetValue(ValidatedIssuer, out var validatedIssuer) == true &&
+            !string.IsNullOrWhiteSpace(validatedIssuer) && principal.Identity is ClaimsIdentity identity)
+        {
+            foreach (var claim in identity.FindAll("iss").ToArray()) identity.RemoveClaim(claim);
+            identity.AddClaim(new Claim("iss", validatedIssuer));
+        }
         var subject = principal.FindFirstValue("sub");
         var issuer = principal.FindFirstValue("iss");
         if (string.IsNullOrEmpty(subject) || string.IsNullOrEmpty(issuer))

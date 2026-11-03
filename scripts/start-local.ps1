@@ -1,4 +1,4 @@
-param([switch]$SkipBuild, [switch]$BackendOnly)
+param([switch]$SkipBuild, [switch]$BackendOnly, [switch]$SeedDemo)
 . (Join-Path $PSScriptRoot 'local-environment.ps1')
 if (-not (Test-Path -LiteralPath (Join-Path $postgresData 'PG_VERSION'))) {
     throw 'This workspace does not contain the isolated development PostgreSQL cluster.'
@@ -31,7 +31,7 @@ if (-not $SkipBuild -and -not $runningApi) {
 $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:DOTNET_ENVIRONMENT = 'Development'
 $env:Development__EnableDemoAuth = 'true'
-$env:Development__SeedDemo = 'true'
+$env:Development__SeedDemo = if ($SeedDemo) { 'true' } else { 'false' }
 $env:Database__MigrateOnStartup = 'true'
 $env:ASPNETCORE_URLS = 'http://127.0.0.1:5080'
 function Start-ProjectProcess([string]$Name, [string]$File, [string[]]$Arguments, [int]$Port = 0) {
@@ -74,5 +74,5 @@ foreach ($endpoint in $endpoints) {
 if ($BackendOnly) {
     Write-Host 'API and database ready. Logs: .runtime/.'
 } else {
-    Write-Host 'Preview: http://127.0.0.1:4173/ (simulation data). Logs: .runtime/.'
+    Write-Host 'Local database-backed app: http://127.0.0.1:4173/ (development login; sample seeding is opt-in). Logs: .runtime/.'
 }

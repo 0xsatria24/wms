@@ -1,11 +1,16 @@
 // Loopback-only UI fixtures. No database, real identity provider or operational grants.
 import http from 'node:http';
+const port = Number(process.env.WMS_PREVIEW_PORT || 5191);
 let stage = 'activation';
 let state = 'required';
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1:5191');
   res.setHeader('Cache-Control', 'no-store');
   const json = (value, status = 200) => { res.writeHead(status, {'Content-Type':'application/json'}); res.end(JSON.stringify(value)); };
+  // The fixture has no real SSO session. Continue using the real demo application's login.
+  if ((state === 'completed' && url.pathname === '/') || url.pathname === '/auth/login') {
+    res.writeHead(302, {Location:'http://127.0.0.1:5187/'}); return res.end();
+  }
   if (url.pathname === '/api/session') return json({mode:'oidc',csrfToken:'ui-fixture',user:null});
   if (url.pathname === '/api/setup/status') return json({state,companyName:'Perusahaan uji UI'});
   if (url.pathname === '/api/setup/session') return json({stage,csrfToken:'ui-fixture',identity:stage==='review'?{name:'Admin uji UI',email:'admin@example.test'}:null});
@@ -23,4 +28,4 @@ const server = http.createServer(async (req, res) => {
     res.end(Buffer.from(await upstream.arrayBuffer()));
   } catch {res.writeHead(502);res.end('Start the local Vite preview on port 5187.');}
 });
-server.listen(5191,'127.0.0.1',()=>console.log('UI fixture preview: http://127.0.0.1:5191 (not real SSO or provisioning)'));
+server.listen(port,'127.0.0.1',()=>console.log(`UI fixture preview: http://127.0.0.1:${port} (not real SSO or provisioning)`));

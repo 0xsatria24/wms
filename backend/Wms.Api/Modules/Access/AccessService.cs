@@ -37,7 +37,8 @@ public sealed class AccessService(WmsDb db)
             verified = principal.Verified,
             status = principal.Status,
             role = grants.FirstOrDefault()?.Role ?? "viewer",
-            warehouses = grants.Select(g => g.Warehouse).ToArray()
+            warehouses = grants.Select(g => g.Warehouse).ToArray(),
+            adminWarehouses = grants.Where(g => g.Role == "admin").Select(g => g.Warehouse).ToArray()
         };
     }
 }

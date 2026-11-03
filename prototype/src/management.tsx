@@ -14,7 +14,7 @@ import { BulkActions } from "./BulkActions";
 import { canAccessAction } from "./bulk-model";
 import { downloadLabelSheet } from "./bulk-files";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
-import { MAIN, SECONDARY, locations } from "./fixtures";
+import { MAIN, locations } from "./fixtures";
 import {
   useText,
   useCataloguePageSize,
@@ -39,7 +39,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
   const [tab, setTab] = useState("users");
   const [selected, setSelected] = useState(null);
   const [role, setRole] = useState("operator");
-  const [warehouses, setWarehouses] = useState([MAIN]);
+  const [warehouses, setWarehouses] = useState<string[]>([]);
   const [reason, setReason] = useState("");
   const [userAction, setUserAction] = useState(null);
   const [newName, setNewName] = useState("");
@@ -90,12 +90,12 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
     setWarehouses(u.warehouses);
     setReason("");
   };
-  const save = (status) => {
-    if (!reason.trim() || !warehouses.length) {
+  const save = async (status) => {
+    if (!reason.trim() || status === "active" && !warehouses.length) {
       flash(
         t(
-          "Choose a warehouse and add a decision reason.",
-          "Pilih gudang dan isi alasan keputusan.",
+          !reason.trim() ? "Add a decision reason." : "Choose at least one warehouse.",
+          !reason.trim() ? "Isi alasan keputusan." : "Pilih setidaknya satu gudang.",
         ),
         "error",
       );
@@ -111,28 +111,31 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
       );
       return;
     }
-    setData((s) => ({
+    setActionBusy(true);
+    const saved = await setData((s) => ({
       ...s,
       users: s.users.map((u) =>
-        u.id === selected.id ? { ...u, role, warehouses, status } : u,
+        u.id === selected.id ? status === "active" ? { ...u, role, warehouses, status } : { ...u, status } : u,
       ),
       audit: [
         {
           id: crypto.randomUUID(),
           type: "access-change",
           user: user.id,
-          warehouse: MAIN,
+          warehouse,
           payload: { target: selected.id, role, warehouses, status, reason },
           stamp: new Date().toISOString(),
         },
         ...s.audit,
       ],
     }));
+    setActionBusy(false);
+    if (!saved) return;
     setSelected(null);
     flash(
       t(
-        "Access decision recorded in the local demo. No email was sent.",
-        "Keputusan akses dicatat di demo lokal. Tidak ada email dikirim.",
+        "Access decision saved. No email was sent.",
+        "Keputusan akses tersimpan. Tidak ada email dikirim.",
       ),
     );
   };
@@ -249,7 +252,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
       {selected && (
         <Modal
           title={t("Review warehouse access", "Tinjau akses gudang")}
-          onClose={() => setSelected(null)}
+          onClose={() => !actionBusy && setSelected(null)}
         >
           <div className="stack">
             <Summary
@@ -259,7 +262,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
                 [
                   t("Email verification", "Verifikasi email"),
                   selected.verified
-                    ? t("Verified (demo)", "Terverifikasi (demo)")
+                    ? t("Verified", "Terverifikasi")
                     : t("Not verified", "Belum diverifikasi"),
                 ],
               ]}
@@ -275,7 +278,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
               <legend>
                 {t("Allowed warehouses", "Gudang yang diizinkan")}
               </legend>
-              {[MAIN, SECONDARY].map((w) => (
+              {(user.adminWarehouses || []).map((w) => (
                 <label key={w} className="checkbox-label">
                   <input
                     type="checkbox"
@@ -304,6 +307,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
             <div className="form-actions">
               <Button
                 danger
+                disabled={actionBusy || !["pending", "active"].includes(selected.status)}
                 onClick={() =>
                   save(selected.status === "pending" ? "rejected" : "revoked")
                 }
@@ -314,7 +318,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
               </Button>
               <Button
                 primary
-                disabled={!selected.verified}
+                disabled={!selected.verified || actionBusy}
                 onClick={() => save("active")}
               >
                 {selected.status === "pending"

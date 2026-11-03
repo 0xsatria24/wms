@@ -237,10 +237,13 @@ function Application({ locale, setLocale }) {
       );
   }, []);
   useEffect(() => {
-    if (userRef.current) {
+    if (userRef.current?.warehouses.includes(warehouse)) {
+      const owner = userRef.current.id;
+      const target = warehouse;
       setLoading(snapshotScope !== `${userRef.current.id}|${warehouse}`);
       refresh()
         .catch((error) => {
+          if (userRef.current?.id !== owner || warehouseRef.current !== target) return;
           setNotice({ kind: "error", message: errorText(error.message, t) });
           if (error.status === 401 || error.status === 403) {
             userRef.current = null;
@@ -252,7 +255,7 @@ function Application({ locale, setLocale }) {
     }
   }, [user?.id, warehouse, catalogueQuery]);
   useEffect(() => {
-    if (userRef.current) return api.subscribe(warehouse, () => { void refresh().catch(() => {}); });
+    if (userRef.current?.warehouses.includes(warehouse)) return api.subscribe(warehouse, () => { void refresh().catch(() => {}); });
   }, [user?.id, warehouse]);
   useEffect(() => {
     const handle = () => {
@@ -819,7 +822,7 @@ function Application({ locale, setLocale }) {
         <Modal
           title={
             review.logout
-              ? t("Sign out of this demo?", "Keluar dari demo ini?")
+              ? t("Sign out of this application?", "Keluar dari aplikasi ini?")
               : t("Review and confirm", "Tinjau dan konfirmasi")
           }
           onClose={() => !busy && setReview(null)}

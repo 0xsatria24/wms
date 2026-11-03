@@ -6,6 +6,7 @@ export interface SessionUser {
   email: string;
   role: string;
   warehouses: string[];
+  adminWarehouses: string[];
   status: string;
   verified: boolean;
 }
@@ -415,10 +416,11 @@ export async function persistEdit(
       await verifyDemoEmail(changedUser.email);
       return;
     }
-    await edit("access", {
-      ...changedUser,
-      reason: next.audit[0]?.payload?.reason || "",
-    });
+    const reason = next.audit[0]?.payload?.reason || "";
+    if (changedUser.status === "rejected" || changedUser.status === "revoked")
+      await edit("access-status", { id: changedUser.id, expectedStatus: old.status, status: changedUser.status, reason });
+    else
+      await edit("access", { ...changedUser, reason });
     return;
   }
   const order = next.orders.find(

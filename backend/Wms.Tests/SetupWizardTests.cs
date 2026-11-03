@@ -84,6 +84,10 @@ public class SetupWizardTests(PostgresFixture postgres)
         if (activated) http.Request.Headers.Cookie = activation.Response.Headers.SetCookie.ToString().Split(';')[0];
         var props = new AuthenticationProperties(); props.Items[SetupService.Flow] = service.Read(http)?.Nonce ?? "missing";
         var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "first"), new Claim("iss", "https://identity.example"), new Claim("email", "admin@example.com"), new Claim("email_verified", verified.ToString())], "oidc"));
+        // Default OIDC claim actions remove iss after the UserInfo response.
+        var identity = (ClaimsIdentity)principal.Identity!;
+        identity.RemoveClaim(identity.FindFirst("iss")!);
+        props.Items[SsoEnrollment.ValidatedIssuer] = "https://identity.example";
         var context = new TicketReceivedContext(http, new AuthenticationScheme("oidc", null, typeof(OpenIdConnectHandler)), new OpenIdConnectOptions(), new AuthenticationTicket(principal, props, "oidc"));
         await SsoEnrollment.Ticket(context);
         Assert.True(context.Result?.Handled);
@@ -92,6 +96,7 @@ public class SetupWizardTests(PostgresFixture postgres)
         if (activated && verified) {
             var next = new DefaultHttpContext(); next.Request.Headers.Cookie = http.Response.Headers.SetCookie.ToString().Split(';')[0];
             Assert.Equal("admin@example.com", service.Read(next)?.Identity?.Email);
+            Assert.Equal("https://identity.example", service.Read(next)?.Identity?.Issuer);
         }
     }
 
@@ -110,6 +115,7 @@ public class SetupWizardTests(PostgresFixture postgres)
                 ["Oidc:Authority"] = "https://identity.example", ["Oidc:ClientId"] = "wms", ["AllowedHosts"] = "localhost",
                 ["DataProtection:KeyPath"] = Path.Combine(Path.GetTempPath(), "wms-setup-test-keys"), ["ReverseProxy:KnownProxies"] = "127.0.0.1", ["Database:MigrateOnStartup"] = "false"
             }) builder.UseSetting(setting.Key, setting.Value);
+            builder.ConfigureServices(services => services.PostConfigure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options => options.ConfigurationManager = new Microsoft.IdentityModel.Protocols.StaticConfigurationManager<Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfiguration>(new Microsoft.IdentityModel.Protocols.OpenIdConnect.OpenIdConnectConfiguration { Issuer = "https://identity.example", AuthorizationEndpoint = "https://identity.example/authorize", TokenEndpoint = "https://identity.example/token" })));
         });
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/health/ready")).StatusCode);
@@ -118,6 +124,9 @@ public class SetupWizardTests(PostgresFixture postgres)
         var session = await client.GetFromJsonAsync<JsonElement>("/api/setup/session");
         client.DefaultRequestHeaders.Add("X-XSRF-TOKEN", session.GetProperty("csrfToken").GetString());
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/setup/activate", new { code = "secret" })).StatusCode);
+        using var challenge = await client.GetAsync("/auth/setup-login");
+        Assert.Equal(HttpStatusCode.Redirect, challenge.StatusCode);
+        Assert.Equal("login", Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(challenge.Headers.Location!.Query)["prompt"].ToString());
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/workspaces/main/snapshot")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/setup/complete", new { warehouseId = "main", warehouseName = "Main", storageLocations = new[]{"A"} })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/access/request", new { email = "worker@example.com", name = "Worker" })).StatusCode);

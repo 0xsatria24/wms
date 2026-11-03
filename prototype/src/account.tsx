@@ -126,7 +126,7 @@ export function Auth({
     <div className="auth-page">
       <header className="auth-top">
         <a href="#signin">Inventory / WMS</a>
-        <span className="simulation">{t("Local demo", "Demo lokal")}</span>
+        {authMode === "development-demo" && <span className="simulation">{t("Local demo", "Demo lokal")}</span>}
       </header>
       <main className={`auth-card ${registering ? "registration" : ""}`}>
         <section className="auth-intro">
@@ -173,8 +173,8 @@ export function Auth({
             <div className="stack">
               <Notice>
                 {t(
-                  "Sign in and password recovery use your company identity provider.",
-                  "Login dan pemulihan password memakai penyedia identitas perusahaan.",
+                  "Enter your company credentials on the next screen. You can sign in with a different account.",
+                  "Masukkan akun perusahaan di halaman berikutnya. Kamu bisa masuk dengan akun lain.",
                 )}
               </Notice>
               {rememberMeOption}

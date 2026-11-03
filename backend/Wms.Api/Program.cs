@@ -113,6 +113,7 @@ if (!demo) auth.AddOpenIdConnect(o =>
     o.ClientSecret = builder.Configuration["Oidc:ClientSecret"];
     o.ResponseType = OpenIdConnectResponseType.Code;
     o.UsePkce = true;
+    o.Prompt = "login";
     o.MapInboundClaims = false;
     o.SaveTokens = false;
     o.GetClaimsFromUserInfoEndpoint = true;
