@@ -41,7 +41,14 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
         var supportingPages = Math.Max(1, (int)Math.Ceiling(supportingTotal / (double)supportingSize));
         var supportingPage = Math.Clamp(input.SupportingPage, 1, supportingPages);
         var records = new List<SupportingRecord>();
-        foreach (var kind in new[] { "packages", "unitMaster", "locationMaster" })
+        var packageSearch = input.PackagesQuery.Trim().ToLowerInvariant();
+        var packageQuery = db.SupportingRecords.FromSqlInterpolated($"SELECT * FROM \"SupportingRecords\" WHERE octet_length(\"PayloadJson\"::text) <= {SupportingPayload.MaxBytes} AND (strpos(lower(\"Id\"), {packageSearch}) > 0 OR strpos(lower(\"PayloadJson\"::text), {packageSearch}) > 0)")
+            .Where(r => r.CompanyId == "demo" && r.WarehouseId == actor.WarehouseId && r.Kind == "packages");
+        var packageTotal = await packageQuery.CountAsync(ct);
+        var packagePages = Math.Max(1, (int)Math.Ceiling(packageTotal / (double)supportingSize));
+        var packagePage = Math.Clamp(input.PackagesPage, 1, packagePages);
+        records.AddRange(await packageQuery.OrderBy(r => r.Id).Skip((packagePage - 1) * supportingSize).Take(supportingSize).ToListAsync(ct));
+        foreach (var kind in new[] { "unitMaster", "locationMaster" })
         {
             var operational = await boundedRecords.Where(r => r.Kind == kind).OrderBy(r => r.Id).Take(101).ToListAsync(ct);
             supportingRecordsWarning |= operational.Count > 100;
@@ -65,7 +72,7 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
         var userDtos = users.Select(user =>
         {
             var userGrants = grants.Where(g => g.PrincipalId == user.Id).ToArray();
-            return (object)new { id = user.Id, name = user.Name, email = user.Email, verified = user.Verified, status = user.Status, role = userGrants.FirstOrDefault()?.Role ?? "viewer", warehouses = userGrants.Select(g => warehouses[g.WarehouseId]).ToArray(), invitationId = invitations.GetValueOrDefault(user.Id)?.Id.ToString() };
+            return (object)new { id = user.Id, name = user.Name, email = user.Email, verified = user.Verified, status = user.Status, role = userGrants.FirstOrDefault(g => g.WarehouseId == actor.WarehouseId)?.Role ?? userGrants.FirstOrDefault()?.Role ?? "viewer", warehouses = userGrants.Select(g => warehouses[g.WarehouseId]).ToArray(), warehouseRoles = userGrants.ToDictionary(g => warehouses[g.WarehouseId], g => g.Role), invitationId = invitations.GetValueOrDefault(user.Id)?.Id.ToString() };
         }).ToArray();
         var positionIds = positions.Select(p => p.Id).ToArray();
         var lastMovements = await (from entry in db.Entries
@@ -73,14 +80,23 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
             where positionIds.Contains(entry.PositionId) && movement.WarehouseId == actor.WarehouseId
             group movement by entry.PositionId into history
             select new { PositionId = history.Key, PostedAt = history.Max(m => m.PostedAt) }).ToDictionaryAsync(x => x.PositionId, x => (DateTimeOffset?)x.PostedAt, ct);
-        var ledgerQuery = db.Entries.Where(e => positionIds.Contains(e.PositionId)).Join(db.Movements, e => e.MovementId, m => m.Id, (e, m) => new { e, m });
-        if (input.Sku != "") ledgerQuery = ledgerQuery.Where(x => db.Positions.Any(p => p.Id == x.e.PositionId && db.Items.Any(i => i.Id == p.ItemId && i.Sku == input.Sku)));
-        if (input.Location != "") ledgerQuery = ledgerQuery.Where(x => db.Positions.Any(p => p.Id == x.e.PositionId && db.Locations.Any(l => l.Id == p.LocationId && l.Code == input.Location)));
-        if (input.Query != "") ledgerQuery = ledgerQuery.Where(x => (x.m.Source + " " + x.m.Kind + " " + x.m.Id).ToLower().Contains(input.Query.ToLower()));
+        var ledgerQuery = from e in db.Entries
+            join m in db.Movements on e.MovementId equals m.Id
+            join p in db.Positions on e.PositionId equals p.Id
+            join l in db.Locations on p.LocationId equals l.Id
+            join i in db.Items on p.ItemId equals i.Id
+            where m.CompanyId == "demo" && p.CompanyId == "demo" && i.CompanyId == "demo" && m.WarehouseId == actor.WarehouseId && l.WarehouseId == actor.WarehouseId
+                && (actor.Role != "operator" || !db.Documents.Any(d => d.Kind == "count" && d.Status != "closed" && d.WarehouseId == actor.WarehouseId && d.ItemId == p.ItemId && d.LocationId == p.LocationId))
+            select new { e, m, p, l, i };
+        if (input.Sku != "") ledgerQuery = ledgerQuery.Where(x => x.i.Sku == input.Sku);
+        if (input.Location != "") ledgerQuery = ledgerQuery.Where(x => x.l.Code == input.Location);
+        var ledgerSearch = input.Query.Trim().ToLowerInvariant();
+        if (ledgerSearch != "") ledgerQuery = ledgerQuery.Where(x => (x.m.Source + " " + x.m.Kind + " " + x.m.Id + " " + x.e.Id.ToString()).ToLower().Contains(ledgerSearch));
         if (start.HasValue) ledgerQuery = ledgerQuery.Where(x => x.m.PostedAt >= start.Value);
         if (end.HasValue) ledgerQuery = ledgerQuery.Where(x => x.m.PostedAt < end.Value);
         var includeLedger = input.View is "movements" or "tracking" or "overview";
         var ledgerTotal = includeLedger ? await ledgerQuery.CountAsync(ct) : 0;
+        var ledgerQuantities = await ledgerQuery.Where(x => includeLedger).GroupBy(x => x.e.Unit).Select(g => new { unit = g.Key, qty = g.Sum(x => x.e.QuantityDelta) }).OrderBy(x => x.unit).ToListAsync(ct);
         var ledgerPageSize = Math.Clamp(input.PageSize, 1, 50);
         var ledgerPage = Math.Clamp(input.Page, 1, Math.Max(1, (int)Math.Ceiling(ledgerTotal / (double)ledgerPageSize)));
         var entries = await ledgerQuery.OrderByDescending(x => x.m.PostedAt).ThenBy(x => x.e.Id).Skip((ledgerPage - 1) * ledgerPageSize).Take(includeLedger ? ledgerPageSize : 0).ToListAsync(ct);
@@ -88,8 +104,49 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
         var boundedAudit = db.Audit.FromSqlInterpolated($"SELECT * FROM \"Audit\" WHERE octet_length(\"DetailJson\"::text) <= {SupportingPayload.MaxBytes}");
         supportingRecordsWarning |= await db.Outbox.AnyAsync(e => e.WarehouseId == actor.WarehouseId && !boundedEvents.Any(s => s.Id == e.Id), ct)
             || await db.Audit.AnyAsync(a => a.WarehouseId == actor.WarehouseId && !boundedAudit.Any(s => s.Id == a.Id), ct);
-        var events = await boundedEvents.Where(e => e.WarehouseId == actor.WarehouseId).OrderByDescending(e => e.CreatedAt).Take(200).ToListAsync(ct);
+        var eventQuery = boundedEvents.Where(e => e.CompanyId == "demo" && e.WarehouseId == actor.WarehouseId);
+        var eventScopeTotal = await eventQuery.CountAsync(ct);
+        if (input.View == "integration")
+        {
+            var eventSearch = input.Query.Trim().ToLowerInvariant();
+            if (eventSearch != "") eventQuery = eventQuery.Where(e => (e.Id.ToString() + " " + e.AggregateId + " " + e.Kind + " " + e.TransportStatus + " " + e.BusinessStatus).ToLower().Contains(eventSearch));
+            if (input.Status == "needs-attention") eventQuery = eventQuery.Where(e => e.BusinessStatus != "accepted");
+            else if (input.Status != "") eventQuery = eventQuery.Where(e => e.TransportStatus == input.Status || e.BusinessStatus == input.Status);
+            if (start.HasValue) eventQuery = eventQuery.Where(e => e.CreatedAt >= start.Value);
+            if (end.HasValue) eventQuery = eventQuery.Where(e => e.CreatedAt < end.Value);
+        }
+        var eventTotal = await eventQuery.CountAsync(ct);
+        var eventPageSize = Math.Clamp(input.PageSize, 1, 50);
+        var eventPages = Math.Max(1, (int)Math.Ceiling(eventTotal / (double)eventPageSize));
+        var eventPage = Math.Clamp(input.Page, 1, eventPages);
+        var events = await eventQuery.OrderByDescending(e => e.CreatedAt).ThenBy(e => e.Id).Skip(input.View == "integration" ? (eventPage - 1) * eventPageSize : 0).Take(input.View == "integration" ? eventPageSize : 200).ToListAsync(ct);
         var audit = await boundedAudit.Where(a => a.WarehouseId == actor.WarehouseId).OrderByDescending(a => a.PostedAt).Take(200).ToListAsync(ct);
+        var sourceSearch = input.ReturnSourcesQuery.Trim().ToLowerInvariant();
+        var returnSourceGroups = from entry in db.Entries
+            join movement in db.Movements on entry.MovementId equals movement.Id
+            join position in db.Positions on entry.PositionId equals position.Id
+            join location in db.Locations on position.LocationId equals location.Id
+            join item in db.Items on position.ItemId equals item.Id
+            where input.View == "returns" && movement.CompanyId == "demo" && position.CompanyId == "demo" && item.CompanyId == "demo" && item.Active
+                && movement.WarehouseId == actor.WarehouseId && location.WarehouseId == actor.WarehouseId
+                && (input.Sku == "" || item.Sku == input.Sku)
+                && (sourceSearch == "" || (movement.Id + " " + movement.Source + " " + item.Sku + " " + item.Name).ToLower().Contains(sourceSearch))
+                && (movement.Kind == "ship" && entry.QuantityDelta < 0
+                    || (actor.Role == "admin" || actor.Role == "supervisor") && (movement.Kind == "qc" || movement.Kind == "opening") && entry.QuantityDelta > 0 && location.Code == "QC" && position.Condition == "not-good" && position.Hold == "quality-rejected")
+                && (actor.Role != "operator" || !db.Documents.Any(d => d.Kind == "count" && d.Status != "closed" && d.WarehouseId == actor.WarehouseId && d.ItemId == position.ItemId && d.LocationId == position.LocationId))
+            group entry by new { movement.Id, movement.Kind, movement.PostedAt, ItemId = item.Id, item.Sku, item.Unit } into source
+            select new { source.Key, Quantity = source.Sum(e => e.QuantityDelta) };
+        var sourceRemainders = from source in returnSourceGroups
+            let type = source.Key.Kind == "ship" ? "customer-return" : "supplier-return"
+            let returned = db.Documents.Where(d => d.CompanyId == "demo" && d.Kind == type && d.WarehouseId == actor.WarehouseId && d.ItemId == source.Key.ItemId && d.Source == source.Key.Id).Sum(d => d.Quantity)
+            let remaining = (source.Key.Kind == "ship" ? -source.Quantity : source.Quantity) - returned
+            let available = db.Positions.Where(p => p.CompanyId == "demo" && p.ItemId == source.Key.ItemId && p.Condition == "not-good" && p.Hold == "quality-rejected" && db.Locations.Any(l => l.Id == p.LocationId && l.WarehouseId == actor.WarehouseId && l.Code == "QC")).Sum(p => p.OnHand - p.Committed)
+            select new { source.Key, Remaining = source.Key.Kind == "ship" ? remaining : Math.Min(remaining, available) };
+        var returnSourceQuery = sourceRemainders.Where(s => s.Remaining > 0);
+        var returnSourcesTotal = await returnSourceQuery.CountAsync(ct);
+        var returnSourcesPages = Math.Max(1, (int)Math.Ceiling(returnSourcesTotal / (double)supportingSize));
+        var returnSourcesPage = Math.Clamp(input.ReturnSourcesPage, 1, returnSourcesPages);
+        var returnSources = await returnSourceQuery.OrderByDescending(s => s.Key.PostedAt).ThenBy(s => s.Key.Id).ThenBy(s => s.Key.Sku).Skip((returnSourcesPage - 1) * supportingSize).Take(supportingSize).ToListAsync(ct);
         var itemById = items.ToDictionary(i => i.Id);
         var positionById = positions.ToDictionary(p => p.Id);
         string Sku(string id) => itemById[id].Sku;
@@ -114,23 +171,25 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
                     row["expected"] = d.Expected.HasValue ? Number(d.Expected.Value) : null;
                 return row;
             }),
-            ledger = entries.Where(x => !blindScopes.Contains((positionById[x.e.PositionId].ItemId, positionById[x.e.PositionId].LocationId))).Select(x => { var position = positionById[x.e.PositionId]; return new { id = x.e.Id.ToString(), transaction = x.m.Id, sku = Sku(position.ItemId), warehouse = Wh(actor.WarehouseId), location = locations[position.LocationId].Code, qty = Number(x.e.QuantityDelta), kind = x.m.Kind, source = x.m.Source, user = x.m.Actor, occurred = x.m.OccurredAt, posted = x.m.PostedAt }; }),
+            ledger = entries.Select(x => new { id = x.e.Id.ToString(), transaction = x.m.Id, sku = x.i.Sku, warehouse = Wh(actor.WarehouseId), location = x.l.Code, qty = Number(x.e.QuantityDelta), unit = x.e.Unit, kind = x.m.Kind, source = x.m.Source, user = x.m.Actor, occurred = x.m.OccurredAt, posted = x.m.PostedAt }),
+            ledgerSummary = new { total = ledgerTotal, quantities = ledgerQuantities.Select(x => new { x.unit, qty = Number(x.qty) }) },
             events = events.Select(e => new { id = e.Id.ToString(), source = e.AggregateId, type = e.Kind, warehouse = Wh(e.WarehouseId), wms = "confirmed", transport = e.TransportStatus, business = e.BusinessStatus, attempts = e.Attempts, createdAt = e.CreatedAt, nextAttemptAt = e.NextAttemptAt, payload = JsonSerializer.Deserialize<JsonElement>(e.PayloadJson) }),
             audit = audit.Select(a => new { id = a.TransactionId, type = a.Action, user = a.PrincipalId, warehouse = Wh(a.WarehouseId), payload = JsonSerializer.Deserialize<JsonElement>(a.DetailJson), stamp = a.PostedAt }),
             users = userDtos,
             userPage = new { page = userPage, pages = userPages, total = userTotal, pendingTotal, pageSize = 25 },
             supportingPage = new { page = supportingPage, pages = supportingPages, total = supportingTotal, pageSize = supportingSize },
+            packagePage = new { page = packagePage, pages = packagePages, total = packageTotal, pageSize = supportingSize },
+            eventPage = new { page = eventPage, pages = eventPages, total = eventTotal, pageSize = eventPageSize, scopeTotal = eventScopeTotal },
             supportingRecordsWarning,
             activity = new { from = input.From, to = input.To, timeZone = zone, confirmedActions = await db.Audit.CountAsync(a => a.WarehouseId == actor.WarehouseId && (!start.HasValue || a.PostedAt >= start.Value) && (!end.HasValue || a.PostedAt < end.Value), ct) },
             currentRole = actor.Role,
+            workflowEnabled = configuration?.GetValue<bool>("Workflow:Enabled") ?? true,
             operationalTotals = new { erp = await db.Outbox.CountAsync(e => e.WarehouseId == actor.WarehouseId && e.BusinessStatus != "accepted", ct), freezes = await db.Documents.CountAsync(d => d.Kind == "count" && d.Status != "closed" && d.WarehouseId == actor.WarehouseId, ct) },
             backupEvidence = backupEvidence is null ? (JsonElement?)null : JsonSerializer.Deserialize<JsonElement>(backupEvidence),
             erpDelivery = new { enabled = configuration?.GetValue<bool>("Erp:Enabled") ?? false, paused = configuration?.GetValue<bool>("Erp:DispatchPaused") == true || await db.SupportingRecords.AnyAsync(r => r.Kind == "outbox-pause", ct), maintenance = await db.SupportingRecords.AnyAsync(r => r.Id == "outbox-recovery-hold" && r.Kind == "outbox-pause", ct) },
             warehouseMaster = warehouses.Where(w => w.Key != "transit").Select(w => new { id = w.Key, name = w.Value }),
-            returnSources = input.View == "returns" ? await (from entry in db.Entries join movement in db.Movements on entry.MovementId equals movement.Id join position in db.Positions on entry.PositionId equals position.Id join item in db.Items on position.ItemId equals item.Id
-                where movement.WarehouseId == actor.WarehouseId && window.ItemIds.Contains(item.Id) && (movement.Kind == "ship" && entry.QuantityDelta < 0 || (movement.Kind == "qc" || movement.Kind == "opening") && entry.QuantityDelta > 0 && position.Condition == "not-good" && position.Hold == "quality-rejected")
-                orderby movement.PostedAt descending
-                select new { id = movement.Id, sku = item.Sku, type = movement.Kind == "ship" ? "customer" : "supplier" }).Distinct().Take(50).ToListAsync(ct) : null,
+            returnSources = returnSources.Select(s => new { id = s.Key.Id, sku = s.Key.Sku, type = s.Key.Kind == "ship" ? "customer" : "supplier", unit = s.Key.Unit, remaining = Number(s.Remaining) }),
+            returnSourcesPage = new { total = returnSourcesTotal, page = returnSourcesPage, pages = returnSourcesPages, pageSize = supportingSize },
             catalogue = window.Metadata,
             shipments = input.View == "stock" ? await new ShipmentQuery(db).Read(actor, input.FocusSku, ct) : null,
             ledgerPage = new { total = ledgerTotal, page = ledgerPage, pages = Math.Max(1, (int)Math.Ceiling(ledgerTotal / (double)ledgerPageSize)) },
@@ -140,7 +199,7 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
             packages = Supporting("packages"),
             labelHistory = Supporting("labelHistory"),
             followups = Supporting("followups"),
-            locationMaster = locations.Values.Select(l => new { name = l.Code, factor = "1", pickable = l.Pickable, frozen = l.Frozen }),
+            locationMaster = locations.Values.Select(l => new { name = l.Code, factor = "1", pickable = l.Pickable, frozen = l.Frozen, version = l.Version }),
             unitMaster = new object[] { new { name = "units", factor = "1" } }.Concat(Supporting("unitMaster")),
             documentDates = docs.ToDictionary(d => d.Id, d => new { d.DocumentDate, d.ScheduledDate, d.CreatedAt, d.UpdatedAt, d.StartedAt, d.SubmittedAt, d.ApprovedAt, d.CompletedAt, d.Creator }),
             pending = Array.Empty<object>(),

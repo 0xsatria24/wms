@@ -8,6 +8,7 @@ import { WorkQueue } from "./WorkQueue";
 import { productSuggestions } from "./autocomplete-model";
 import { useServerCatalogue } from "./server-catalogue";
 import { canOrderAction } from "./bulk-model";
+import {quantity} from './workflow-model';
 import { selectDraftDocument, captureDocumentDraft } from "./work-queue-model";
 import {
   useText,
@@ -41,8 +42,9 @@ export function Operations(props) {
   const documentField = ["receiving", "transfers"].includes(route) ? "document" : ["quality", "putaway", "count"].includes(route) || route === "cancellation" && d.mode && d.mode !== "cancel" ? "task" : "order";
   const patch = (changes) => applyDraft(captureDocumentDraft(d, changes, documentField, activeDocumentId));
   const t = useText();
+  const canManage = user.role === 'admin' || user.role === 'supervisor';
   const { date } = useDateTime();
-  useServerCatalogue(data, ["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) ? undefined : props.setCatalogueQuery, { view: route, focusSku: d.newOrderSku || d.sku || "", focusDocument: d[documentField] || "", page: props.catalogueQuery?.page || 1, pageSize: 25 });
+  useServerCatalogue(data, ["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) ? undefined : props.setCatalogueQuery, { view: route, focusSku: d.newOrderSku || d.sku || "", focusDocument: d[documentField] || "", sku:route==='returns'?(d.sku||''):'', returnSourcesQuery:d.sourceSearch||'', returnSourcesPage:d.sourcePage||1, page: props.catalogueQuery?.page || 1, pageSize: 25 });
   const storageLocations = (data.locationMaster || []).filter((location) => (location.pickable ?? /^A-/.test(location.name)) && !location.frozen).map((location) => location.name);
   const operationSku = d.sku || data.products.find((product) => product.active)?.sku || "";
   const operationLocations = data.positions.filter((position) => position.sku === operationSku && position.warehouse === warehouse && available(position) > 0).map((position) => position.location);
@@ -61,7 +63,8 @@ export function Operations(props) {
     (product) => product.sku === newSku && product.active,
   );
   const value = (key: string, fallback: any = "") => d[key] ?? fallback;
-  const validQty = (max = Infinity) => String(value("qty")).trim() !== "" && Number.isInteger(Number(value("qty"))) && Number(value("qty")) > 0 && Number(value("qty")) <= max;
+  const validQty = (max = Infinity) => !!quantity(String(value('qty'))) && Number(quantity(String(value('qty')))) <= max;
+  const quantityUnit = () => data.products.find(p=>p.sku===([...data.receipts,...data.orders,...data.inspections,...data.putaways,...data.counts,...data.returnTasks].find(d=>d.id===activeDocumentId)?.sku||operationSku))?.unit||t('base unit','satuan dasar');
   const quantityHint = () => String(value("qty")).trim() === ""
     ? t("Not entered", "Belum diisi")
     : t("Enter a valid quantity", "Isi jumlah yang valid");
@@ -98,10 +101,10 @@ export function Operations(props) {
   );
   const qtyField = (fallback, max = undefined) =>
     field(
-      t("Actual quantity (units, required)", "Jumlah aktual (unit, wajib)"),
+      t(`Actual quantity (${quantityUnit()}, required)`, `Jumlah aktual (${quantityUnit()}, wajib)`),
       "qty",
       "",
-      { type: "number", min: 1, max, step: 1, required: true },
+      { inputMode: "decimal", required: true },
     );
   const scanField = (sku) =>
     field(
@@ -150,9 +153,9 @@ export function Operations(props) {
             )
           }
         >
-          {t("Keep draft", "Simpan draf")}
+          {t("Keep in this tab", "Simpan di tab ini")}
         </Button>
-        <Button primary type="submit" disabled={disabled}>
+        <Button primary type="submit" disabled={disabled || user.role === 'viewer'}>
           {button || t("Review and confirm", "Tinjau dan konfirmasi")}
         </Button>
       </div>
@@ -168,7 +171,7 @@ export function Operations(props) {
   };
   const quantityDetails = (q) => [
     t("Actual", "Aktual"),
-    `${q} ${t("units", "unit")}`,
+    `${q} ${quantityUnit()}`,
   ];
   const itemDetails = (sku) => [
     t("Item", "Barang"),
@@ -259,7 +262,7 @@ export function Operations(props) {
     }));
     const doc = selectDraftDocument(docs, d.document);
     activeDocumentId = doc?.id;
-    const q = Number(value("qty"));
+    const q = Number(quantity(String(value("qty"))));
     content = !doc ? emptyQueue(docs, "document", (
       <Panel>
         <Empty
@@ -484,7 +487,7 @@ export function Operations(props) {
     const task = selectDraftDocument(tasks, d.task);
     activeDocumentId = task?.id;
     const destination = value("destination", storageLocations[0] || "");
-    const q = Number(value("qty"));
+    const q = Number(quantity(String(value("qty"))));
     content = !task ? emptyQueue(tasks, "task", (
       <Panel>
         <Empty
@@ -587,7 +590,7 @@ export function Operations(props) {
         : route === "picking"
           ? o?.allocations[location] || 0
           : o?.allocations.Staging || 0;
-    const q = Number(value("qty"));
+    const q = Number(quantity(String(value("qty"))));
     const ready = route !== "shipping" || data.partialAllowed ||
       (max >= remaining && (!validQty(max) || q === remaining));
     content = !o ? emptyQueue(orders.map((order) => ({ ...order, remaining: stageQty(order), status: canWork(order) ? "ready" : "waiting" })), "order", (
@@ -1377,7 +1380,8 @@ export function Operations(props) {
     const mode = value("mode", "customer");
     const sku = operationSku;
     const source = value("source", "");
-    const q = Number(value("qty"));
+    const q = Number(quantity(String(value("qty"))));
+    const sourceRow=(data.returnSources||[]).find(row=>row.id===source&&row.sku===sku&&row.type===mode);
     content = (
       <Panel title={t("Return details", "Detail retur")}>
         <Tabs
@@ -1395,12 +1399,9 @@ export function Operations(props) {
           <>
             <div className="form-grid">
               {itemField}
-              {field(
-                t("Source document (required)", "Dokumen asal (wajib)"),
-                "source",
-                "",
-                { required: true, suggestions: (data.returnSources || []).filter((row) => row.sku === sku && row.type === mode).map((row) => ({ value: row.id, label: row.id })) },
-              )}
+              <Field label={t('Search eligible source','Cari sumber yang sah')} value={value('sourceSearch')} onChange={e=>patch({sourceSearch:e.target.value,sourcePage:1})}/>
+              <Field label={t('Source shipment / QC','Sumber pengiriman / QC')}><select value={source} onChange={e=>patch({source:e.target.value,qty:undefined,scan:''})}><option value="">{t('Choose an eligible source','Pilih sumber yang sah')}</option>{(data.returnSources||[]).filter(row=>row.sku===sku&&row.type===mode).map(row=><option key={row.id} value={row.id}>{row.id} · {t('Returnable','Boleh diretur')} {row.remaining} {row.unit}</option>)}</select></Field>
+              {sourceRow&&<p>{t('Remaining returnable','Sisa yang boleh diretur')}: {sourceRow.remaining} {sourceRow.unit}</p>}
               {scanField(sku)}
               {qtyField(5)}
               {reasonField(true)}
@@ -1445,13 +1446,9 @@ export function Operations(props) {
           mode === "customer"
             ? t("Review return receipt", "Tinjau penerimaan retur")
             : t("Review return dispatch", "Tinjau pengiriman retur"),
-          mode === "supplier" && user.role === "operator",
+          !sourceRow || !validQty(Number(sourceRow.remaining)) || mode === "supplier" && !['admin','supervisor'].includes(user.role) || user.role==='viewer',
         )}
-        {next(
-          "quality",
-          "Open quality inspection",
-          "Buka pemeriksaan kualitas",
-        )}
+        {data.returnSourcesPage&&<div className="form-actions"><Button disabled={data.returnSourcesPage.page<=1} onClick={()=>patch({sourcePage:data.returnSourcesPage.page-1})}>{t('Previous sources','Sumber sebelumnya')}</Button><span>{data.returnSourcesPage.page} / {data.returnSourcesPage.pages}</span><Button disabled={data.returnSourcesPage.page>=data.returnSourcesPage.pages} onClick={()=>patch({sourcePage:data.returnSourcesPage.page+1})}>{t('Next sources','Sumber berikutnya')}</Button></div>}
         <DataTable
           label={t("Return history", "Riwayat retur")}
           empty={t("No returns recorded yet.", "Belum ada retur tercatat.")}
@@ -1476,11 +1473,11 @@ export function Operations(props) {
     const task = selectDraftDocument(scoped(data.counts).filter((count) => count.status !== "closed" || count.id === d.task), d.task);
     activeDocumentId = task?.id;
     const reviewer =
-      user.role !== "operator" && value("view", "count") === "review";
-    const q = Number(value("qty", ""));
+      canManage && value("view", "count") === "review";
+    const q = Number(quantity(String(value("qty", "")),true));
     content = (
       <Panel title={t("Count workspace", "Ruang kerja opname")}>
-        {user.role !== "operator" && (
+        {canManage && (
           <Tabs
             label={t("Count view", "Tampilan hitung")}
             items={[
@@ -1509,7 +1506,7 @@ export function Operations(props) {
             <Empty
               title={t("No active count task", "Belum ada tugas hitung aktif")}
             />
-            {user.role !== "operator" && (
+            {canManage && (
               <div className="stack">
               {itemField}
               {select(t("Location", "Lokasi"), "location", (data.locationMaster || []).filter((row) => !row.frozen).map((row) => [row.name, row.name]), operationLocation)}
@@ -1653,7 +1650,7 @@ export function Operations(props) {
                     ),
                     "qty",
                     "",
-                    { type: "number", min: 0, step: 1, required: true },
+                    { type: "number", min: 0, step: 0.000001, required: true },
                   )}
                   <Notice>
                     {t(

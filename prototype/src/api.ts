@@ -102,11 +102,12 @@ export async function session(): Promise<Session> {
   csrf = value.csrfToken;
   return value;
 }
-async function request<T = void>(
+export async function request<T = void>(
   path: string,
   body?: unknown,
   key?: string,
   refreshCsrf = true,
+  readSignal?: AbortSignal,
 ): Promise<T> {
   if (body !== undefined && !csrf) await session();
   const controller = new AbortController();
@@ -122,7 +123,7 @@ async function request<T = void>(
         ...(key ? { "Idempotency-Key": key } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: controller.signal,
+      signal: body === undefined && readSignal ? AbortSignal.any([controller.signal, readSignal]) : controller.signal,
     });
     if (!response.ok) {
       const problem = await response.json().catch(() => ({
@@ -136,6 +137,7 @@ async function request<T = void>(
     }
     return response.status === 204 ? undefined : await response.json();
   } catch (error) {
+    if (readSignal?.aborted && body === undefined) throw error;
     if (error instanceof ApiError) throw error;
     throw new ApiError("network");
   } finally {
@@ -246,10 +248,10 @@ export function uiSnapshot(value: any): any {
     );
   return value;
 }
-export async function snapshot(warehouse: string, options: Record<string, string | number | boolean> = {}) {
+export async function snapshot(warehouse: string, options: Record<string, string | number | boolean> = {}, signal?: AbortSignal) {
   const params = new URLSearchParams(Object.entries({ ...options, requestKey: JSON.stringify(options) }).map(([key, value]) => [key, String(value)]));
   const value = uiSnapshot(
-    await request(`/api/workspaces/${encodeURIComponent(warehouse)}/snapshot?${params}`),
+    await request(`/api/workspaces/${encodeURIComponent(warehouse)}/snapshot?${params}`,undefined,undefined,true,signal),
   );
   for (const key of ["receipts", "orders", "inspections", "putaways", "returnTasks", "transfers", "returns", "counts"]) {
     value[key] = (value[key] || []).map((row: any) => ({ ...row, ...value.documentDates?.[row.id] }));

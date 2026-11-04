@@ -46,6 +46,42 @@ public sealed class StockWorkspaceTests(PostgresFixture postgres)
         Assert.Single(await verify.Outbox.Where(e => e.AggregateId == id && e.Kind == "manual-receive").ToListAsync());
     }
     [Fact]
+    public async Task FractionalReceiptLedgerUsesCanonicalItemUnit()
+    {
+        var options = await postgres.Database();
+        await using (var db = new WmsDb(options)) { var item = await db.Items.SingleAsync(i => i.Sku == "SKU-B"); item.Unit = "kg"; await db.SaveChangesAsync(); }
+        var id = ReferenceId.New();
+        await Run(options, "manual-receive", new { document = id, origin = "Delivery", reason = "No PO", lines = new[] { await Line(options, "SKU-B", "0.5") } });
+        await using var verify = new WmsDb(options);
+        Assert.Equal("kg", (await verify.Entries.SingleAsync(e => verify.Movements.Any(m => m.Id == e.MovementId && m.Source == id))).Unit);
+    }
+    [Fact]
+    public async Task ManualReceiptQcPartialPutawayAndRelocationConserveLineageAndQuantities()
+    {
+        var options = await postgres.Database();
+        await using (var db = new WmsDb(options)) { db.Items.Add(new() { Id = "demo|FLOW", Sku = "FLOW", Name = "Flow test", Barcode = "FLOW", Unit = "kg" }); await db.SaveChangesAsync(); }
+        var receipt = ReferenceId.New(); var lineId = ReferenceId.New();
+        await Run(options, "manual-receive", new { document = receipt, origin = "Delivery", reason = "Manual", lines = new[] { await Line(options, "FLOW", "30", lineId) } });
+        string qcId; long qcVersion;
+        await using (var db = new WmsDb(options)) { var qc = await db.Documents.SingleAsync(d => d.Kind == "inspection" && d.Source == lineId); qcId = qc.Id; qcVersion = qc.Version; Assert.Equal(30m, await db.Positions.Where(p => p.ItemId == "demo|FLOW" && p.Hold == "awaiting-qc").SumAsync(p => p.OnHand)); }
+        await Run(options, "qc", new { task = qcId, good = "24", bad = "6", reason = "Quality rejection" }, qcVersion);
+        string putawayId; long putawayVersion;
+        await using (var db = new WmsDb(options)) { var task = await db.Documents.SingleAsync(d => d.Kind == "putaway" && d.Source == qcId); putawayId = task.Id; putawayVersion = task.Version; }
+        await Run(options, "putaway", new { task = putawayId, qty = "20", destination = "A-01", locationScan = "A-01", scan = "FLOW" }, putawayVersion);
+        await using (var db = new WmsDb(options)) { Assert.Equal(20m, await db.Positions.Where(p => p.ItemId == "demo|FLOW" && p.LocationId == "main|A-01").SumAsync(p => p.OnHand)); putawayVersion = (await db.Documents.SingleAsync(d => d.Id == putawayId)).Version; }
+        await Run(options, "putaway", new { task = putawayId, qty = "4", destination = "A-01", locationScan = "A-01", scan = "FLOW" }, putawayVersion);
+        string position; long positionVersion;
+        await using (var db = new WmsDb(options)) { var source = await db.Positions.SingleAsync(p => p.ItemId == "demo|FLOW" && p.LocationId == "main|A-01"); position = source.Id; positionVersion = source.Version; }
+        await Run(options, "relocate", new { sku = "FLOW", position, positionVersion, qty = "5", destination = "A-02", locationScan = "A-02", sourceScan = "A-01", scan = "FLOW" });
+        await using var verify = new WmsDb(options);
+        Assert.Equal(30m, await verify.Positions.Where(p => p.ItemId == "demo|FLOW").SumAsync(p => p.OnHand));
+        Assert.Equal(24m, await verify.Positions.Where(p => p.ItemId == "demo|FLOW" && p.Condition == "good").SumAsync(p => p.OnHand));
+        Assert.Equal(6m, await verify.Positions.Where(p => p.ItemId == "demo|FLOW" && p.Hold == "quality-rejected").SumAsync(p => p.OnHand));
+        Assert.All(await verify.Entries.Where(e => verify.Positions.Any(p => p.Id == e.PositionId && p.ItemId == "demo|FLOW")).ToListAsync(), e => Assert.Equal("kg", e.Unit));
+        var graph = Json(await new Wms.Modules.Workflow.WorkflowService(verify).Read(Admin, new(Document: receipt), CancellationToken.None));
+        Assert.Contains(graph.GetProperty("documents").EnumerateArray(), d => d.GetProperty("id").GetString() == qcId);
+    }
+    [Fact]
     public async Task InvalidReceiptLineRollsBackEntirePostingAndHeader()
     {
         var options = await postgres.Database();

@@ -57,7 +57,7 @@ public sealed class OperationalExport(WmsDb db)
     }
     public async Task<ExportResult> Create(ActingPrincipal actor, ExportRequest r, CancellationToken cancellationToken)
     {
-        Require(r.Type is "stock" or "ledger" or "count-sheet" or "count-review" or "count-report" or "packing" or "ship" or "receive" or "receive-summary" or "transfer-send" or "transfer-receive" or "transfer-summary" or "customer-return" or "supplier-return", "required", 400);
+        Require(r.Type is "stock" or "ledger" or "count-sheet" or "count-review" or "count-report" or "packing" or "ship" or "receive" or "manual-receive" or "receive-summary" or "transfer-send" or "transfer-receive" or "transfer-summary" or "customer-return" or "supplier-return", "required", 400);
         Require(r.Locale is "en" or "id" && r.Scope is "all" or "selected", "required", 400);
         Require(r.Type is "stock" or "ledger" ? r.Format is "csv" or "xlsx" : r.Type == "count-review" ? r.Format == "xlsx" : r.Format == "pdf", "required", 400);
         Require(Active.TryAdd(actor.Id, 0), "export-busy", 409);
@@ -212,7 +212,7 @@ public sealed class OperationalExport(WmsDb db)
     {
         var d = await Source(actor, r, ct); var item = await db.Items.AsNoTracking().SingleAsync(i => i.Id == d.ItemId, ct);
         var type = r.Type;
-        Require(type switch { "packing" or "ship" => d.Kind == "order", "receive" or "receive-summary" => d.Kind == "po", "transfer-send" or "transfer-receive" or "transfer-summary" => d.Kind == "transfer", _ => d.Kind == type }, "source", 400);
+        Require(type switch { "packing" or "ship" => d.Kind == "order", "receive" or "receive-summary" => d.Kind == "po", "manual-receive" => d.Kind == "receipt-line", "transfer-send" or "transfer-receive" or "transfer-summary" => d.Kind == "transfer", _ => d.Kind == type }, "source", 400);
         if (d.Kind == "transfer") { var names = await db.Warehouses.Where(w => w.Id == d.WarehouseId || w.Id == d.TargetWarehouseId).ToDictionaryAsync(w => w.Id, w => w.Name, ct); meta["FromWarehouse"] = names[d.WarehouseId]; meta["ToWarehouse"] = names[d.TargetWarehouseId!]; }
         var positions = await db.Positions.Join(db.Locations, p => p.LocationId, l => l.Id, (p, l) => new { p.ItemId, p.LocationId, l.WarehouseId }).Where(x => x.ItemId == d.ItemId && x.WarehouseId == actor.WarehouseId).ToListAsync(ct);
         await Blind(actor, positions.Select(p => (p.ItemId, p.LocationId)), ct);
@@ -220,7 +220,7 @@ public sealed class OperationalExport(WmsDb db)
         if (type.EndsWith("-summary")) { title = T("Operational summary", "Rekap operasional"); meta["CumulativeAtSnapshot"] = "true"; var actual = d.Actual; Table(["Document", "SKU", "ItemName", "OrderedOrSent", "Received", "Remaining", "Unit", "Status"], [new[] { d.Id, item.Sku, item.Name, N(d.Quantity), N(actual), N(d.Quantity - actual), item.Unit, d.Status }]); var events = await Events(actor, d.Id, ct); meta["TransactionIds"] = string.Join(", ", events.Select(e => e.Id)); return; }
         var movementKind = type == "transfer-send" ? "transfer-send" : type == "transfer-receive" ? "transfer-receive" : type;
         var txId = r.TransactionId;
-        if (type is "customer-return" or "supplier-return")
+        if (type is "customer-return" or "supplier-return" or "manual-receive")
         {
             var evidence = await db.SupportingRecords.AsNoTracking().Where(s => s.Kind == "export-evidence" && s.WarehouseId == actor.WarehouseId && EF.Functions.JsonContains(s.PayloadJson, JsonSerializer.Serialize(new { documentIds = new[] { d.Id } }))).ToListAsync(ct);
             var transactions = evidence.Select(e => JsonDocument.Parse(e.PayloadJson).RootElement).Where(e => e.GetProperty("kind").GetString() == type).Select(e => e.GetProperty("transactionId").GetString()!).Distinct().ToArray();
@@ -228,7 +228,14 @@ public sealed class OperationalExport(WmsDb db)
         }
         Require(!string.IsNullOrEmpty(txId), "required", 400);
         var entries = await Lines().Where(x => x.Movement.Id == txId && x.Movement.Kind == movementKind && x.Item.Id == d.ItemId && (x.Movement.WarehouseId == d.WarehouseId || d.Kind == "transfer" && x.Movement.WarehouseId == d.TargetWarehouseId)).ToListAsync(ct);
-        Require(entries.Count > 0 && entries.All(x => x.Movement.Source == (type is "customer-return" or "supplier-return" ? d.Source : d.Id)), "export-source", 409);
+        Require(entries.Count > 0 && entries.All(x => x.Movement.Source == (type is "customer-return" or "supplier-return" or "manual-receive" ? d.Source : d.Id)), "export-source", 409);
+        if (type == "manual-receive")
+        {
+            // Same-SKU lines can share a physical ledger entry; export this line's immutable document actual.
+            title = T("Manual goods receipt line", "Baris bukti penerimaan manual");
+            meta["ReceiptHeader"] = d.Source;
+            Table(["Receipt", "Line", "TransactionId", "SKU", "ItemName", "Quantity", "Unit", "Condition", "Hold", "PostedAt", "ActorId"], [new[] { d.Source, d.Id, txId!, item.Sku, item.Name, N(d.Actual), item.Unit, "unassessed", "awaiting-qc", D(entries[0].Movement.PostedAt), entries[0].Movement.Actor }]); return;
+        }
         var actualEntries = type is "ship" or "supplier-return" or "transfer-send" ? entries.Where(x => x.Entry.QuantityDelta < 0 && x.Location.WarehouseId == d.WarehouseId).ToList() : entries.Where(x => x.Entry.QuantityDelta > 0 && x.Location.WarehouseId == (type == "transfer-receive" ? d.TargetWarehouseId : d.WarehouseId)).ToList();
         Require(actualEntries.Count > 0, "export-source", 409);
         title = type switch { "ship" => T("WMS shipment receipt", "Bukti pengiriman WMS"), "receive" => T("WMS goods receipt", "Bukti penerimaan WMS"), "transfer-send" => T("Transfer dispatch", "Bukti kirim transfer"), "transfer-receive" => T("Transfer receipt", "Bukti terima transfer"), "customer-return" => T("Customer return", "Bukti retur pelanggan"), _ => T("Supplier return", "Bukti retur supplier") };

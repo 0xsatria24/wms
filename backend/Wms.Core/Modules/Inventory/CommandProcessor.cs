@@ -58,17 +58,20 @@ public sealed partial class CommandProcessor(WmsDb db)
         var transitId = command.Type == "transfer-receive" ? $"transit|{command.Payload.Text("document")}" : "";
         locations = await db.Locations.FromSqlInterpolated($"SELECT * FROM \"Locations\" WHERE \"WarehouseId\" = {actor.WarehouseId} OR \"Id\" = {transitId} ORDER BY \"Id\" FOR UPDATE").ToListAsync(ct);
         var locationIds = locations.Select(l => l.Id).ToArray();
+        var requestedScan = input.Payload.Text("scan");
+        if (requestedScan.Length > 0 || input.Type == "manual-receive") await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"edit:demo:catalog"}, 0))", ct);
         positions = await db.Positions.Where(p => p.CompanyId == "demo" && locationIds.Contains(p.LocationId)).ToListAsync(ct);
         documents = await db.Documents.Where(d => d.CompanyId == "demo" && (d.WarehouseId == actor.WarehouseId || d.TargetWarehouseId == actor.WarehouseId)).ToListAsync(ct);
         var docIds = documents.Select(d => d.Id).ToArray();
         allocations = await db.Allocations.Where(a => docIds.Contains(a.OrderId)).ToListAsync(ct);
         var relatedItems = positions.Select(position => position.ItemId).Concat(documents.Select(document => document.ItemId)).Distinct().ToArray();
         var requestedSku = input.Payload.Text("sku");
-        items = await db.Items.AsNoTracking().Where(i => i.CompanyId == "demo" && (relatedItems.Contains(i.Id) || i.Sku == requestedSku)).Select(i => new Item { Id = i.Id, Sku = i.Sku, Barcode = i.Barcode, Active = i.Active, Unit = i.Unit, ConversionFactor = i.ConversionFactor }).ToListAsync(ct);
+        items = await db.Items.AsNoTracking().Where(i => i.CompanyId == "demo" && (relatedItems.Contains(i.Id) || i.Sku == requestedSku || requestedScan != "" && (i.Sku == requestedScan || i.Barcode == requestedScan))).Select(i => new Item { Id = i.Id, Sku = i.Sku, Barcode = i.Barcode, Active = i.Active, Unit = i.Unit, ConversionFactor = i.ConversionFactor }).ToListAsync(ct);
         Require(await db.Principals.AnyAsync(u => u.Id == actor.Id && u.Status == "active", ct) && await db.AccessGrants.AnyAsync(g => g.PrincipalId == actor.Id && g.WarehouseId == actor.WarehouseId && g.Role == actor.Role, ct), "denied", 403);
         approvalSettings = (await OperationalSettings.Read(db, "approvals", actor.WarehouseId, new ApprovalSettings(), ct)).Value;
         transactionId = ReferenceId.New();
         await Apply(ct);
+        await CompleteWorkflowDraft(ct);
         foreach (var p in positions)
             Require(p.OnHand >= 0 && p.Committed >= 0 && p.Committed <= p.OnHand, "invariant");
         db.ChangeTracker.DetectChanges();
@@ -122,6 +125,8 @@ public sealed partial class CommandProcessor(WmsDb db)
     {
         var item = items.Single(i => i.Id == itemId);
         Require(item.Active && (command.Payload.Text("scan") == item.Sku || command.Payload.Text("scan") == item.Barcode), "scan-item", 400);
+        var code = command.Payload.Text("scan");
+        Require(items.Count(i => i.Active && (i.Sku == code || i.Barcode == code)) == 1, "ambiguous-item");
     }
     private StockPosition Position(string itemId, string location, string condition = "good", string hold = "", string? warehouse = null)
     {
@@ -145,7 +150,8 @@ public sealed partial class CommandProcessor(WmsDb db)
         if (db.Entry(movement).State == EntityState.Detached)
             db.Movements.Add(movement);
         p.OnHand += quantity;
-        db.Entries.Add(new StockEntry { MovementId = movement.Id, PositionId = p.Id, QuantityDelta = quantity });
+        var entryItem = items.Single(i => i.Id == p.ItemId);
+        db.Entries.Add(new StockEntry { MovementId = movement.Id, PositionId = p.Id, QuantityDelta = quantity, Unit = entryItem.Unit, ConversionFactor = entryItem.ConversionFactor });
     }
     private OperationalDocument AddDoc(string kind, string itemId, decimal qty, string source, string? id = null)
     {

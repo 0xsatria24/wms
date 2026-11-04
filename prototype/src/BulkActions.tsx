@@ -14,6 +14,7 @@ export interface BulkAction {
   perform: (row: any, reason: string) => Promise<void | Partial<BulkResult>>;
   after?: (rows: any[]) => Promise<void> | void;
   complete?: (rows: any[]) => Promise<void> | void;
+  prepare?: (rows: any[]) => Promise<void> | void;
   confirmLabel?: string;
   cancelLabel?: string;
 }
@@ -47,6 +48,7 @@ export function BulkActions({
     event.preventDefault();
     if (
       !activeReview ||
+      selection.disabled ||
       executing.current ||
       (activeReview.action.reason && !reason.trim())
     )
@@ -55,7 +57,8 @@ export function BulkActions({
     const { action, rows, skipped, scope } = activeReview;
     setProgress(0);
     try {
-      let results = await selection.run(
+      const prepared = action.prepare ? await withBulkOutput(rows.map(row => ({ id: selection.key(row), status: "success" })), () => action.prepare(rows)) : null;
+      let results = prepared?.some(row => row.status !== "success") ? prepared : await selection.run(
         rows,
         async (row) => {
           const result = await action.perform(row, reason.trim());
@@ -113,7 +116,13 @@ export function BulkActions({
       skipped: t("Skipped", "Dilewati"),
     })[status];
   const message = (value: string) =>
-    value === "output-failed"
+    value === "label-history-saved"
+      ? t("Label file generated and history saved. Physical printing is not confirmed.", "File label dibuat dan riwayat tersimpan. Cetak fisik belum dikonfirmasi.")
+      : value === "label-history-unknown"
+        ? t("Label file generated. History saving is unconfirmed; check history before retrying. The mapping is unchanged.", "File label dibuat. Penyimpanan riwayat belum terkonfirmasi; periksa riwayat sebelum mencoba lagi. Pemetaan tetap.")
+        : value === "label-history-failed"
+          ? t("Label file generated, but history was not saved. The mapping is unchanged.", "File label dibuat, tetapi riwayat belum tersimpan. Pemetaan tetap.")
+    : value === "output-failed"
       ? t(
           "The file could not be created. These items remain selected; try the download again.",
           "File belum dapat dibuat. Item tetap terpilih; coba unduh kembali.",

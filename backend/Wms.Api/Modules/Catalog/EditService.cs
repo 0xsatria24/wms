@@ -52,6 +52,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             Require(p.TryGetProperty("version", out var version) && version.TryGetInt64(out var expected) && expected == item!.Version, "conflict");
             Require(p.TryGetProperty("active", out var activeValue) && activeValue.ValueKind is JsonValueKind.True or JsonValueKind.False, "required", 400);
             var active = activeValue.GetBoolean();
+            if (active) Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Id != item.Id && i.Active && (i.Sku == item.Sku || i.Barcode == item.Sku || i.Sku == item.Barcode || i.Barcode == item.Barcode), ct), "ambiguous-item");
             Require(p.Text("reason").Length <= 2000 && (active || !string.IsNullOrWhiteSpace(p.Text("reason"))), "reason", 400);
             if (!active) await RequireNoOpenWork(item!, ct);
             item!.Active = active;
@@ -67,6 +68,8 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             var factor = p.Quantity("factor");
             var existing = (await db.Items.FromSqlInterpolated($"SELECT * FROM \"Items\" WHERE \"CompanyId\" = 'demo' AND \"Sku\" = {sku} FOR UPDATE").ToListAsync(ct)).SingleOrDefault();
             Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Sku != sku && i.Barcode == p.Text("barcode"), ct), "duplicate", 409);
+            var barcodeCode = p.Text("barcode");
+            Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Sku != sku && i.Active && (i.Sku == barcodeCode || i.Barcode == sku), ct), "ambiguous-item");
             if (existing is null)
             {
                 existing = new Item { Id = $"demo|{sku}", Sku = sku, Name = p.Text("name"), Barcode = p.Text("barcode"), Unit = p.Text("unit") };
@@ -213,23 +216,49 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             var allowed = await db.AccessGrants.Where(g => g.PrincipalId == actor.Id && g.Role == "admin").Join(db.Warehouses, g => g.WarehouseId, w => w.Id, (g, w) => w).ToListAsync(ct);
             var existingGrants = await db.AccessGrants.Where(g => g.PrincipalId == id).ToListAsync(ct);
             Require(existingGrants.All(g => allowed.Any(w => w.Id == g.WarehouseId)), "user-scope", 403);
+            userTargetId = id;
+            userSnapshot = new { target.Name, target.Email, PreviousStatus = target.Status, Grants = existingGrants.Select(g => new { g.WarehouseId, g.Role }).ToArray() };
             target!.Status = status;
             if (status == "active")
             {
-                var role = p.Text("role");
-                Require(role is "admin" or "supervisor" or "operator" or "viewer", "required", 400);
-                var requested = p.GetProperty("warehouses").EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
-                Require(requested.Length > 0 && requested.All(name => allowed.Any(w => w.Name == name)), "scope", 403);
-                var desired = requested.Select(name => allowed.Single(w => w.Name == name).Id).ToArray();
+                var desired = new Dictionary<string, string>();
+                if (p.TryGetProperty("warehouseRoles", out var warehouseRoles))
+                {
+                    Require(warehouseRoles.ValueKind == JsonValueKind.Object, "required", 400);
+                    foreach (var row in warehouseRoles.EnumerateObject())
+                    {
+                        Require(row.Value.ValueKind == JsonValueKind.String, "required", 400);
+                        var role = row.Value.GetString()!;
+                        Require(role is "admin" or "supervisor" or "operator" or "viewer", "required", 400);
+                        var warehouse = allowed.SingleOrDefault(w => w.Name == row.Name);
+                        Require(warehouse is not null, "scope", 403);
+                        Require(desired.TryAdd(warehouse!.Id, role), "required", 400);
+                    }
+                    Require(desired.Count > 0, "scope", 403);
+                }
+                else
+                {
+                    var role = p.Text("role");
+                    Require(role is "admin" or "supervisor" or "operator" or "viewer", "required", 400);
+                    Require(p.TryGetProperty("warehouses", out var requestedWarehouses) && requestedWarehouses.ValueKind == JsonValueKind.Array, "required", 400);
+                    var requested = requestedWarehouses.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString()! : "").Distinct().ToArray();
+                    Require(requested.Length > 0 && requested.All(name => allowed.Any(w => w.Name == name)), "scope", 403);
+                    var mixedRoles = existingGrants.Select(g => g.Role).Distinct().Count() > 1;
+                    foreach (var name in requested)
+                    {
+                        var warehouse = allowed.Single(w => w.Name == name);
+                        desired[warehouse.Id] = mixedRoles ? existingGrants.FirstOrDefault(g => g.WarehouseId == warehouse.Id)?.Role ?? role : role;
+                    }
+                }
                 foreach (var grant in existingGrants)
                 {
-                    if (desired.Contains(grant.WarehouseId))
+                    if (desired.TryGetValue(grant.WarehouseId, out var role))
                         grant.Role = role;
                     else
                         db.AccessGrants.Remove(grant);
                 }
-                foreach (var wh in desired.Where(wh => !existingGrants.Any(g => g.WarehouseId == wh)))
-                    db.AccessGrants.Add(new AccessGrant { PrincipalId = id, WarehouseId = wh, Role = role });
+                foreach (var row in desired.Where(row => !existingGrants.Any(g => g.WarehouseId == row.Key)))
+                    db.AccessGrants.Add(new AccessGrant { PrincipalId = id, WarehouseId = row.Key, Role = row.Value });
             }
         }
         else if (request.Type == "create-order")
@@ -278,11 +307,17 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             SupportingPayload.RequireBounded(p.GetRawText());
             if (request.Type == "followups")
             {
-                SupportingPayload.RequireShape(p, "note", "user", "warehouse", "stamp");
+                SupportingPayload.RequireShape(p, "note", "user", "warehouse", "stamp", "caseReference");
                 var note = p.Text("note").Trim();
                 Require(note.Length is > 0 and <= 2000, "required", 400);
+                var caseReference = p.Text("caseReference").Trim();
+                Require(caseReference.Length <= 200, "required", 400);
+                if (caseReference != "")
+                    Require(await db.Outbox.AnyAsync(e => e.CompanyId == "demo" && e.WarehouseId == actor.WarehouseId && (e.AggregateId == caseReference || e.Id.ToString() == caseReference), ct)
+                        || await db.Documents.AnyAsync(d => d.CompanyId == "demo" && d.WarehouseId == actor.WarehouseId && d.Id == caseReference, ct)
+                        || await db.Movements.AnyAsync(m => m.CompanyId == "demo" && m.WarehouseId == actor.WarehouseId && m.Id == caseReference, ct), "source", 400);
                 var warehouseName = await db.Warehouses.Where(w => w.Id == actor.WarehouseId).Select(w => w.Name).SingleAsync(ct);
-                p = JsonSerializer.SerializeToElement(new { note, user = actor.Id, warehouse = warehouseName, stamp = DateTimeOffset.UtcNow });
+                p = JsonSerializer.SerializeToElement(new { note, caseReference, user = actor.Id, warehouse = warehouseName, stamp = DateTimeOffset.UtcNow });
             }
             if (request.Type == "labelHistory")
             {
@@ -335,7 +370,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
         }
         else
             throw new BusinessException("unsupported", 400);
-        db.Audit.Add(new AuditRecord { TransactionId = ReferenceId.New(), WarehouseId = actor.WarehouseId, PrincipalId = actor.Id, Action = request.Type, DetailJson = JsonSerializer.Serialize(new { request.Type, Target = userTargetId ?? p.Text("id"), Sku = p.Text("sku"), Role = p.Text("role"), Status = p.Text("status"), Reason = p.Text("reason"), DocumentDate = request.Type == "document-dates" ? p.Text("documentDate") : null, ScheduledDate = request.Type == "document-dates" ? p.Text("scheduledDate") : null, DeletedItem = deletedItem, User = userSnapshot, Warehouses = p.TryGetProperty("warehouses", out var auditWarehouses) ? auditWarehouses : (JsonElement?)null }), PostedAt = DateTimeOffset.UtcNow });
+        db.Audit.Add(new AuditRecord { TransactionId = ReferenceId.New(), WarehouseId = actor.WarehouseId, PrincipalId = actor.Id, Action = request.Type, DetailJson = JsonSerializer.Serialize(new { request.Type, Target = userTargetId ?? p.Text("id"), Sku = p.Text("sku"), Role = p.Text("role"), Status = p.Text("status"), Reason = p.Text("reason"), DocumentDate = request.Type == "document-dates" ? p.Text("documentDate") : null, ScheduledDate = request.Type == "document-dates" ? p.Text("scheduledDate") : null, DeletedItem = deletedItem, User = userSnapshot, Warehouses = p.TryGetProperty("warehouses", out var auditWarehouses) ? auditWarehouses : (JsonElement?)null, WarehouseRoles = p.TryGetProperty("warehouseRoles", out var auditRoles) ? auditRoles : (JsonElement?)null }), PostedAt = DateTimeOffset.UtcNow });
         foreach (var entry in db.ChangeTracker.Entries<SupportingRecord>().Where(e => e.State is EntityState.Added or EntityState.Modified))
             await SupportingPayload.RequireStoredBound(db, entry.Entity.PayloadJson, ct);
         await db.SaveChangesAsync(ct);

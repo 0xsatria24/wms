@@ -18,7 +18,7 @@ public sealed partial class CommandProcessor
         {
             var id = p.Text("document");
             Require(BusinessId(id), "required", 400);
-            Require(p.Text("origin").Length is > 0 and <= 300 && p.Text("reason").Length is > 0 and <= 2000 && p.Text("reference").Length <= 200, "required", 400);
+            Require(p.Text("origin").Trim().Length > 0 && p.Text("origin").Length <= 300 && p.Text("reason").Trim().Length > 0 && p.Text("reason").Length <= 2000 && p.Text("reference").Length <= 200, "required", 400);
             Require(p.Text("sourceType") is "" or "manual", "source", 400);
             Require(p.TryGetProperty("lines", out var inputLines) && inputLines.ValueKind == JsonValueKind.Array && inputLines.GetArrayLength() is > 0 and <= 50, "required", 400);
             await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"manual-receipt:" + id}, 0))", ct);
@@ -38,9 +38,11 @@ public sealed partial class CommandProcessor
                 Require(item is not null && item.Active, "scan-item", 400);
                 Require(line.TryGetProperty("version", out var version) && version.TryGetInt64(out var expected) && expected == item.Version, "conflict");
                 Require(line.Text("scan") == item.Sku || line.Text("scan") == item.Barcode, "scan-item", 400);
+                var scan = line.Text("scan");
+                Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Id != item.Id && i.Active && (i.Sku == sku || i.Barcode == sku || i.Sku == scan || i.Barcode == scan), ct), "ambiguous-item");
                 Require(line.Text("unit") == item.Unit, "base-unit-history", 400);
                 var quantity = line.Quantity();
-                if (!items.Any(i => i.Id == item.Id)) items.Add(item);
+                items.RemoveAll(i => i.Id == item.Id); items.Add(item);
                 var receiptLine = AddDoc("receipt-line", item.Id, quantity, id, lineId);
                 receiptLine.Actual = quantity;
                 receiptLine.Status = "complete";
@@ -78,6 +80,12 @@ public sealed partial class CommandProcessor
             var target = Position(item.Id, destination);
             var reference = p.Text("document");
             if (reference.Length == 0) reference = transactionId;
+            else
+            {
+                Require(BusinessId(reference), "required", 400);
+                await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({"relocation:" + reference}, 0))", ct);
+                Require(!await db.Movements.AnyAsync(m => m.Kind == "relocate" && m.Source == reference, ct), "duplicate");
+            }
             Change(source, -quantity, reference);
             Change(target, quantity, reference);
             return;
@@ -107,5 +115,24 @@ public sealed partial class CommandProcessor
             Alloc(order, position).Quantity += quantity;
         }
         db.Entry(order).Property(o => o.Version).IsModified = true;
+    }
+
+    private async Task CompleteWorkflowDraft(CancellationToken ct)
+    {
+        var id = command.Payload.Text("workflowDraft"); if (id.Length == 0) return;
+        Require(BusinessId(id) && command.Payload.TryGetProperty("draftVersion", out var version) && version.TryGetInt64(out _), "required", 400);
+        var expected = command.Payload.GetProperty("draftVersion").GetInt64();
+        var key = $"workflow-draft|{actor.WarehouseId}|{actor.Id}|{id}";
+        await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", ct);
+        var row = await db.SupportingRecords.SingleOrDefaultAsync(r => r.Id == key && r.WarehouseId == actor.WarehouseId && r.Kind == "workflow-draft", ct);
+        if (row is null) { Require(expected == 0, "conflict"); return; }
+        var old = JsonSerializer.Deserialize<JsonElement>(row.PayloadJson);
+        Require(row.Version == expected && old.Text("status") != "confirmed", "conflict");
+        var savedContext = old.GetProperty("data").TryGetProperty("context", out var contextValue) && contextValue.ValueKind == JsonValueKind.Object ? contextValue : JsonSerializer.SerializeToElement(new { });
+        var document = command.Payload.Text("document"); if (document.Length == 0) document = command.Payload.Text("task"); if (document.Length == 0) document = command.Payload.Text("order");
+        var sku = command.Payload.Text("sku"); if (sku.Length == 0 && savedContext.Text("sku").Length <= 200) sku = savedContext.Text("sku");
+        row.PayloadJson = JsonSerializer.Serialize(new { id, owner = actor.Id, status = "confirmed", data = new { context = new { action = "recorded", sku, document }, form = new { action = "recorded", document } }, result = new { id = transactionId, message = "recorded", type = command.Type, stamp = now }, updatedAt = now });
+        Require(System.Text.Encoding.UTF8.GetByteCount(row.PayloadJson) <= 16384, "supporting-payload-size", 400);
+        row.Version++;
     }
 }

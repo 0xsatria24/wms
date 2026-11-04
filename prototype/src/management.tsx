@@ -12,6 +12,7 @@ import { useServerCatalogue } from "./server-catalogue";
 import { useBulkSelection } from "./selection";
 import { BulkActions } from "./BulkActions";
 import { canAccessAction } from "./bulk-model";
+import { accessRoleDraft, recordGeneratedLabel } from "./support-model";
 import { downloadLabelSheet } from "./bulk-files";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { AccountInviteForm } from "./AccountInviteForm";
@@ -35,12 +36,11 @@ import {
 } from "./ui.tsx";
 export { Controls } from "./controls.tsx";
 
-export function Access({ data, setData, user, flash, createUser, deleteUser, setCatalogueQuery, warehouse, editRecord, refresh, inviteAccount, accountInvitation }) {
+export function Access({ data, setData, persistData = setData, user, flash, createUser, deleteUser, setCatalogueQuery, warehouse, editRecord, refresh, inviteAccount, accountInvitation }) {
   const t = useText();
   const [tab, setTab] = useState("users");
   const [selected, setSelected] = useState(null);
-  const [role, setRole] = useState("operator");
-  const [warehouses, setWarehouses] = useState<string[]>([]);
+  const [warehouseRoles, setWarehouseRoles] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
   const [userAction, setUserAction] = useState(null);
   useEffect(() => { setUserAction(null); setSelected(null); }, [user.id, warehouse, user.role]);
@@ -73,8 +73,8 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
       <Panel>
         <Notice kind="warning" title={t("Access denied", "Akses ditolak")}>
           {t(
-            "Only the admin demo role can manage users and access.",
-            "Hanya peran admin demo yang bisa mengelola pengguna dan akses.",
+            "An administrator for this warehouse must manage users and access.",
+            "Admin untuk gudang ini diperlukan untuk mengelola pengguna dan akses.",
           )}
         </Notice>
       </Panel>
@@ -88,11 +88,17 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
   };
   const open = (u) => {
     setSelected(u);
-    setRole(u.role);
-    setWarehouses(u.warehouses);
+    setWarehouseRoles(accessRoleDraft(u));
     setReason("");
   };
   const save = async (status) => {
+    const warehouses = Object.keys(warehouseRoles);
+    const action = status === "active" && selected.status === "active" ? "edit" : status;
+    const current = data.users.find(row => row.id === selected.id);
+    if (actionBusy || loadingUsers || !current || current.status !== selected.status || !canAccessAction(action, current, user) || warehouses.some(w => !(user.adminWarehouses || []).includes(w))) {
+      flash(t("Access or status changed. Reopen the current user before saving.", "Akses atau status berubah. Buka kembali pengguna terbaru sebelum menyimpan."), "error");
+      return;
+    }
     if (!reason.trim() || status === "active" && !warehouses.length) {
       flash(
         t(
@@ -114,10 +120,10 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
       return;
     }
     setActionBusy(true);
-    const saved = await setData((s) => ({
+    const saved = await persistData((s) => ({
       ...s,
       users: s.users.map((u) =>
-        u.id === selected.id ? status === "active" ? { ...u, role, warehouses, status } : { ...u, status } : u,
+        u.id === selected.id ? status === "active" ? { ...u, warehouses, warehouseRoles: { ...warehouseRoles }, status } : { ...u, status } : u,
       ),
       audit: [
         {
@@ -125,7 +131,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
           type: "access-change",
           user: user.id,
           warehouse,
-          payload: { target: selected.id, role, warehouses, status, reason },
+          payload: { target: selected.id, warehouseRoles, warehouses, status, reason },
           stamp: new Date().toISOString(),
         },
         ...s.audit,
@@ -186,12 +192,12 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
           {
             key: "role",
             label: t("Role", "Peran"),
-            render: (u) => <Tag>{u.role}</Tag>,
+            render: (u) => <Tag>{[...new Set(Object.values(accessRoleDraft(u)))].join(", ") || u.role}</Tag>,
           },
           {
             key: "warehouses",
             label: t("Warehouse access", "Akses gudang"),
-            render: (u) => u.warehouses.join(", "),
+            render: (u) => u.warehouses.map(w => `${w} (${accessRoleDraft(u)[w]})`).join(", "),
           },
           {
             key: "status",
@@ -217,14 +223,14 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
               <div className="user-actions">
                 {inviteAccount && u.invitationId && u.status === "pending" && <Button disabled={actionBusy || loadingUsers} onClick={() => setUserAction({ target: null, invitationId: u.invitationId })}>{t("Invitation", "Undangan")}</Button>}
                 <Button
-                  disabled={u.id === user.id || actionBusy || loadingUsers}
+                  disabled={actionBusy || loadingUsers || !["active", "rejected", "revoked", "edit"].some(action => canAccessAction(action, u, user))}
                   onClick={() => open(u)}
                 >
                   {t("Review access", "Tinjau akses")}
                 </Button>
                 <Button
                   danger
-                  disabled={u.id === user.id || actionBusy || loadingUsers}
+                  disabled={u.id === user.id || actionBusy || loadingUsers || !(u.warehouses || []).every(w => (user.adminWarehouses || []).includes(w))}
                   onClick={() => startUserAction(u)}
                 >
                   <Trash size={18} aria-hidden="true" />
@@ -270,32 +276,28 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
                 ],
               ]}
             />
-            <Field label={t("Role to grant", "Peran yang diberikan")}>
-              <select value={role} onChange={(e) => setRole(e.target.value)}>
-                {["operator", "supervisor", "viewer", "admin"].map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
-              </select>
-            </Field>
             <fieldset>
               <legend>
                 {t("Allowed warehouses", "Gudang yang diizinkan")}
               </legend>
               {(user.adminWarehouses || []).map((w) => (
-                <label key={w} className="checkbox-label">
+                <div key={w} className="filter-bar">
+                <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={warehouses.includes(w)}
-                    onChange={(e) =>
-                      setWarehouses(
-                        e.target.checked
-                          ? [...warehouses, w]
-                          : warehouses.filter((x) => x !== w),
-                      )
-                    }
+                    checked={w in warehouseRoles}
+                    disabled={actionBusy}
+                    onChange={(e) => setWarehouseRoles(current => {
+                      const next = { ...current };
+                      if (e.target.checked) next[w] = selected.warehouseRoles?.[w] || "operator";
+                      else delete next[w];
+                      return next;
+                    })}
                   />
                   {w}
                 </label>
+                {w in warehouseRoles && <Field label={t(`Role in ${w}`, `Peran di ${w}`)}><select disabled={actionBusy} value={warehouseRoles[w]} onChange={e => setWarehouseRoles(current => ({ ...current, [w]: e.target.value }))}>{["operator", "supervisor", "viewer", "admin"].map(value => <option key={value}>{value}</option>)}</select></Field>}
+                </div>
               ))}
             </fieldset>
             <Field
@@ -310,7 +312,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
             <div className="form-actions">
               <Button
                 danger
-                disabled={actionBusy || !["pending", "active"].includes(selected.status)}
+                disabled={actionBusy || !canAccessAction(selected.status === "pending" ? "rejected" : "revoked", selected, user)}
                 onClick={() =>
                   save(selected.status === "pending" ? "rejected" : "revoked")
                 }
@@ -321,7 +323,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
               </Button>
               <Button
                 primary
-                disabled={!selected.verified || actionBusy}
+                disabled={actionBusy || !canAccessAction(selected.status === "active" ? "edit" : "active", selected, user)}
                 onClick={() => save("active")}
               >
                 {selected.status === "pending"
@@ -454,7 +456,7 @@ export function Access({ data, setData, user, flash, createUser, deleteUser, set
   );
 }
 
-export function Master({ data, setData, user, flash, deleteItem, setCatalogueQuery, warehouse, editRecord, refresh, locale = "en" }) {
+export function Master({ data, setData, persistData = setData, user, flash, deleteItem, setCatalogueQuery, warehouse, editRecord, refresh, openWorkflow, locale = "en" }) {
   const t = useText();
   const [tab, setTab] = useState("items");
   const [sku, setSku] = useState("SKU-A");
@@ -470,6 +472,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
   const [editorOpen, setEditorOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedItem, setSavedItem] = useState(null);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [status, setStatus] = useState("");
@@ -499,7 +502,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
       { id: "deactivate", label: t("Deactivate selected", "Nonaktifkan terpilih"), reason: true, allowed: row => row.active, perform: async (row, reason) => editRecord("master-status", { sku: row.sku, version: row.version, active: false, reason }), after: refreshBulk },
       { id: "delete", label: t("Delete selected", "Hapus terpilih"), confirmLabel: t("Yes", "Ya"), cancelLabel: t("No", "Tidak"), danger: true, description: t("Items referenced by stock, documents or labels cannot be deleted. Each item is validated by the server.", "Barang yang dirujuk stok, dokumen, atau label tidak dapat dihapus. Setiap barang divalidasi server."), perform: async row => editRecord("delete-master", { sku: row.sku, version: row.version, reason: "User confirmed item deletion" }), after: refreshBulk },
     ] : []),
-    ...(["admin", "supervisor", "operator"].includes(user.role) ? [{ id: "labels", label: t("Download selected labels", "Unduh label terpilih"), allowed: row => row.active && !!row.barcode, description: t("Downloads a printable label sheet. Physical printing is not confirmed.", "Mengunduh lembar label siap cetak. Cetak fisik belum dikonfirmasi."), perform: async row => editRecord("labelHistory", { sku: row.sku, version: row.version, code: row.barcode, action: "download" }), complete: rows => downloadLabelSheet(rows, locale), after: refreshBulk }] : []),
+    ...(["admin", "supervisor", "operator"].includes(user.role) ? [{ id: "labels", label: t("Download selected labels", "Unduh label terpilih"), allowed: row => row.active && !!row.barcode, description: t("Generates a printable sheet, then saves each item's download history. Physical printing is not confirmed.", "Membuat lembar siap cetak, lalu menyimpan riwayat unduhan tiap barang. Cetak fisik belum dikonfirmasi."), prepare: rows => downloadLabelSheet(rows, locale), perform: async row => recordGeneratedLabel(() => editRecord("labelHistory", { sku: row.sku, version: row.version, code: row.barcode, action: "download" })), after: refreshBulk }] : []),
   ];
   const categories = useMemo(
     () =>
@@ -553,7 +556,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
       return;
     }
     setSaving(true);
-    const saved = await setData((s) => ({
+    const saved = await persistData((s) => ({
       ...s,
       products: s.products.some((p) => p.sku === sku)
         ? s.products.map((p) =>
@@ -589,6 +592,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
       setPage(1);
     }
     setSku(form.sku);
+    setSavedItem({ sku: form.sku, name: form.name, active: form.active });
     setEditorOpen(false);
     flash(
       t(
@@ -615,6 +619,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
       />
       {tab === "items" ? (
         <>
+          {savedItem && <Notice kind="success"><span>{t(`${savedItem.name} is saved. Receiving records the physical quantity separately.`, `${savedItem.name} tersimpan. Penerimaan mencatat jumlah fisik secara terpisah.`)}</span>{openWorkflow && savedItem.active && ["operator", "supervisor", "admin"].includes(user.role) && <Button onClick={() => openWorkflow({ action: "receive", sku: savedItem.sku })}>{t("Receive this item", "Terima barang ini")}</Button>}</Notice>}
           <div className="catalogue-heading">
             <div>
               <h3>{t("Item catalogue", "Katalog barang")}</h3>
@@ -785,6 +790,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
                   label: t("Actions", "Tindakan"),
                   render: (p) => (
                     <div className="item-actions">
+                      {openWorkflow && p.active && ["operator", "supervisor", "admin"].includes(user.role) && <Button disabled={saving || !!setCatalogueQuery && !server} onClick={() => openWorkflow({ action: "receive", sku: p.sku })}>{t("Receive", "Terima")}</Button>}
                       <Button
                         aria-label={t(
                           `${canEdit ? "Edit" : "View"} ${p.name} (${p.sku})`,
@@ -886,6 +892,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
               <form className="stack" onSubmit={save}>
                 <h2>{form.name || t("New item", "Barang baru")}</h2>
                 {error && <Notice kind="error">{error}</Notice>}
+                {openWorkflow && selected?.active && ["operator", "supervisor", "admin"].includes(user.role) && <Button disabled={saving || hasChanges} onClick={() => { setEditorOpen(false); openWorkflow({ action: "receive", sku: selected.sku }); }}>{t("Receive this item", "Terima barang ini")}</Button>}
                 <fieldset disabled={!canEdit || saving}>
                   <div className="form-grid">
                     <Field
@@ -1079,15 +1086,15 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
                     ? t("Status", "Status")
                     : t("Conversion factor", "Faktor konversi"),
                 render: (r) =>
-                  tab === "locations" ? t("Active", "Aktif") : r.factor,
+                  tab === "locations" ? [r.frozen ? t("Frozen", "Dibekukan") : t("Not frozen", "Tidak dibekukan"), r.pickable ? t("Pickable", "Dapat dialokasikan") : t("Not pickable", "Tidak dapat dialokasikan")].join(" · ") : r.factor,
               },
             ]}
             empty={t("No master definitions", "Belum ada definisi master")}
           />
           <Notice>
             {t(
-              "New definitions are saved locally. Transaction eligibility still follows the configured task locations and unit rules.",
-              "Definisi baru tersimpan lokal. Lokasi dan satuan yang boleh dipakai transaksi tetap mengikuti aturan tugas.",
+              "Definitions are saved by the API. Transaction eligibility follows each location's operational state and the unit rules.",
+              "Definisi disimpan oleh API. Kelayakan transaksi mengikuti kondisi operasional lokasi dan aturan satuan.",
             )}
           </Notice>
         </>
@@ -1204,7 +1211,7 @@ export function Master({ data, setData, user, flash, deleteItem, setCatalogueQue
                 return;
               }
               setSaving(true);
-              const saved = await setData({
+              const saved = await persistData({
                 ...data,
                 [tab === "locations" ? "locationMaster" : "unitMaster"]: [
                   ...definitions,

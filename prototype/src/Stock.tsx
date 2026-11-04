@@ -17,6 +17,7 @@ import { TableTimestamp } from "./DateTime";
 import { available } from "./fixtures";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { stockItemPage } from "./stock-items";
+import {quantity} from './workflow-model';
 import { useServerCatalogue } from "./server-catalogue";
 import { SelectionCell, SelectionHeader, useBulkSelection } from "./selection";
 import { ExportPanel } from "./ExportPanel";
@@ -49,8 +50,11 @@ export function Stock({
   locale,
   setCatalogueQuery,
   authMode,
+  onProcess = undefined,
+  onReceive = undefined,
 }) {
   const t = useText();
+  const canManage = user.role === 'admin' || user.role === 'supervisor';
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [loc, setLoc] = useState("");
@@ -197,6 +201,7 @@ export function Stock({
   return (
     <>
       <div className="stock-toolbar">
+        {onReceive && <Button primary disabled={user.role === "viewer"} onClick={onReceive}>{t("Receive goods", "Terima barang")}</Button>}
         <div className="search">
           <MagnifyingGlass size={20} aria-hidden="true" />
           <Field
@@ -276,7 +281,7 @@ export function Stock({
           <Button onClick={clearFilters}>
             {t("Clear filters", "Hapus filter")}
           </Button>
-          {user.role !== "operator" && (
+          {canManage && (
             <Button onClick={() => setOpening(true)}>
               {t("Review opening balance", "Tinjau saldo awal")}
             </Button>
@@ -474,7 +479,7 @@ export function Stock({
                             )}
                             <button
                               className="row-select"
-                              onClick={() => setSelected(group.sku)}
+                              onClick={() => { setSelected(group.sku); onProcess?.(group.sku); }}
                               aria-pressed={selected === group.sku}
                             >
                               <ProductName product={group.product} />
@@ -655,8 +660,8 @@ export function Stock({
                       {t("Clear filters", "Hapus filter")}
                     </Button>
                   ) : (
-                    <Button onClick={() => go("transfers")}>
-                      {t("View incoming transfers", "Lihat transfer masuk")}
+                    <Button disabled={user.role === "viewer"} onClick={() => onReceive ? onReceive() : go("receiving")}>
+                      {t("Receive goods", "Terima barang")}
                     </Button>
                   )
                 }
@@ -731,7 +736,7 @@ export function Stock({
                 <div>
                   <h2>{product.name}</h2>
                   <p className="muted">{product.sku}</p>
-                  {user.role !== "operator" && (
+                  {canManage && (
                     <Button onClick={() => inputFile.current.click()}>
                       <UploadSimple size={18} />
                       {product.image
@@ -757,7 +762,7 @@ export function Stock({
                 onChange={choosePhoto}
               />
               {photoError && <Notice kind="error">{photoError}</Notice>}
-              {product.image && user.role !== "operator" && (
+              {product.image && canManage && (
                 <Button
                   onClick={() =>
                     setImagePreview({ sku: selected, remove: true })
@@ -883,7 +888,7 @@ export function Stock({
                   sku: selected,
                   scan: selected,
                   location: "A-01",
-                  qty: Number(openingQty),
+                  qty: Number(quantity(openingQty)),
                   reason,
                 },
                 [
@@ -891,7 +896,7 @@ export function Stock({
                   [t("Destination", "Tujuan"), "A-01"],
                   [
                     t("Opening quantity", "Jumlah saldo awal"),
-                    `${openingQty} ${t("units", "unit")}`,
+                    `${quantity(openingQty)} ${product?.unit||''}`,
                   ],
                   [t("Reason", "Alasan"), reason],
                 ],
@@ -905,10 +910,8 @@ export function Stock({
               )}
             </Notice>
             <Field
-              label={t("Quantity (units)", "Jumlah (unit)")}
-              type="number"
-              min="1"
-              step="1"
+              label={t(`Quantity (${product?.unit||''})`, `Jumlah (${product?.unit||''})`)}
+              inputMode="decimal"
               value={openingQty}
               onChange={(e) => setOpeningQty(e.target.value)}
               required
@@ -919,7 +922,7 @@ export function Stock({
               onChange={(e) => setReason(e.target.value)}
               required
             />
-            <Button primary type="submit">
+            <Button primary type="submit" disabled={!quantity(openingQty)||!reason.trim()}>
               {t("Review", "Tinjau")}
             </Button>
           </form>

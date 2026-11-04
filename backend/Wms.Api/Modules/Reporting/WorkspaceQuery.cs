@@ -4,7 +4,7 @@ using Wms.Shared;
 
 namespace Wms.Modules.Reporting;
 
-public sealed record WorkspaceQuery(string View = "overview", int Page = 1, int PageSize = 25, string Query = "", string Status = "", string Category = "", string Sku = "", string Location = "", string Condition = "", string Sort = "", bool Descending = false, string FocusSku = "", string FocusDocument = "", string From = "", string To = "", string RequestKey = "", int UsersPage = 1, int SupportingPage = 1);
+public sealed record WorkspaceQuery(string View = "overview", int Page = 1, int PageSize = 25, string Query = "", string Status = "", string Category = "", string Sku = "", string Location = "", string Condition = "", string Sort = "", bool Descending = false, string FocusSku = "", string FocusDocument = "", string From = "", string To = "", string RequestKey = "", int UsersPage = 1, int SupportingPage = 1, int PackagesPage = 1, string PackagesQuery = "", int ReturnSourcesPage = 1, string ReturnSourcesQuery = "");
 
 public sealed class WorkspaceWindow
 {
@@ -14,7 +14,7 @@ public sealed class WorkspaceWindow
 
     public static async Task<WorkspaceWindow> Read(WmsDb db, ActingPrincipal actor, WorkspaceQuery input, CancellationToken ct)
     {
-        Rules.Require(input.Query.Length <= 200 && input.RequestKey.Length <= 3000 && input.FocusSku.Length <= 200 && input.FocusDocument.Length <= 200, "required", 400);
+        Rules.Require(input.Query.Length <= 200 && input.RequestKey.Length <= 3000 && input.FocusSku.Length <= 200 && input.FocusDocument.Length <= 200 && input.PackagesQuery.Length <= 200 && input.ReturnSourcesQuery.Length <= 200 && input.Sku.Length <= 200, "required", 400);
         var size = Math.Clamp(input.PageSize, 1, 50);
         var search = input.Query.Trim().ToLowerInvariant();
         var from = WarehouseDates.Date(input.From);
@@ -109,7 +109,9 @@ public sealed class WorkspaceWindow
         var relatedItems = await db.Documents.Where(d => window.DocumentIds.Contains(d.Id)).Select(d => d.ItemId).ToArrayAsync(ct);
         var lookup = input.FocusSku.Trim().ToLowerInvariant();
         var lookupItems = lookup == "" ? Array.Empty<string>() : await items.Where(i => i.Sku.ToLower().Contains(lookup) || i.Barcode.ToLower().Contains(lookup) || i.Name.ToLower().Contains(lookup)).OrderBy(i => i.Sku).Take(50).Select(i => i.Id).ToArrayAsync(ct);
-        if ((window.ItemIds.Length == 0 || input.View == "overview") && lookup == "" && input.View is not "stock" and not "master")
+        if (input.Sku != "")
+            lookupItems = lookupItems.Concat(await items.Where(i => i.Sku == input.Sku).Select(i => i.Id).ToArrayAsync(ct)).Distinct().ToArray();
+        if ((window.ItemIds.Length == 0 || input.View == "overview") && lookupItems.Length == 0 && lookup == "" && input.View is not "stock" and not "master")
             lookupItems = await items.OrderBy(i => i.Sku).Take(25).Select(i => i.Id).ToArrayAsync(ct);
         window.ItemIds = window.ItemIds.Concat(relatedItems).Concat(lookupItems).Distinct().ToArray();
         window.Metadata = new { view = input.View, requestKey = input.RequestKey, ids, total, scopeTotal, page = finalPage, pages = Math.Max(1, (int)Math.Ceiling(total / (double)size)), from = total == 0 ? 0 : (finalPage - 1) * size + 1, to = Math.Min(finalPage * size, total), totalItems = total, totalPositions, scopedItems, scopedPositions, statuses, categories, selectedInFilter };

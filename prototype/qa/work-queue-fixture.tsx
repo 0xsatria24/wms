@@ -104,7 +104,7 @@ function Fixture() {
           <Master
             data={data}
             setData={setData}
-            user={{ id: "qa", role: "admin" }}
+            user={{ id: "qa", role: "admin", warehouses: [MAIN], adminWarehouses: [MAIN] }}
             flash={setMessage}
             deleteItem={async () => false}
           />
@@ -114,7 +114,7 @@ function Fixture() {
             data={data}
             setData={setData}
             warehouse={MAIN}
-            user={{ id: "qa", role: "admin" }}
+            user={{ id: "qa", role: "admin", warehouses: [MAIN], adminWarehouses: [MAIN] }}
             go={setRoute}
             ask={() =>
               setMessage(
