@@ -35,7 +35,7 @@ CUA memakai Vite `http://127.0.0.1:4185/` dan API preview `5180`, dengan databas
 - Desktop tabel/panel, mobile 390px, dark mode, Bahasa Indonesia, focus trap Tab/Shift+Tab dan Escape diuji. Fokus kembali ke pemicu; footer berada di dalam viewport (bottom828 pada tinggi844), lebar dokumen375 pada viewport390.
 - Pemeriksaan pendukung mencakup akses read-only, pemilihan kemasan, ledger, kasus ERP dan pending; label history benar-benar tersimpan. Transport download label dan pencetakan fisik tidak dibuktikan oleh browser ini.
 
-Bukti gambar: `D:/Projects/inventory management system/artifacts/stock-workspace-20261104/`.
+Bukti gambar: [panel desktop](../../artifacts/stock-workspace-20261104/desktop-stock-panel.png) dan [form mobile gelap](../../artifacts/stock-workspace-20261104/mobile-dark-receipt.png). Salinan lokal juga tersedia di `D:/Projects/inventory management system/artifacts/stock-workspace-20261104/`.
 
 ## Cakupan kriteria penerimaan
 
