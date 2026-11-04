@@ -832,6 +832,17 @@ export function StockWorkspace(props: any) {
       c.abort();
     };
   }, [orderItemSearch, action]);
+  const draftControl = (
+        <Button
+          hidden={!!context}
+          onClick={() => {
+            open({ action: "receive" });
+            void showDrafts();
+          }}
+        >
+          {t("Open my drafts", "Buka draf saya")}
+        </Button>
+  );
   return (
     <div className={`stock-workspace ${context ? "has-workflow-panel" : ""}`}>
       <div className="workflow-main" inert={narrow && !!context}>
@@ -840,27 +851,11 @@ export function StockWorkspace(props: any) {
             {...props}
             onProcess={(sku: string) => open({ sku, action: "detail" })}
             onReceive={() => open({ action: "receive" })}
+            draftControl={draftControl}
           />
         ) : (
           <>
-            {route === "receiving" && (
-              <div className="form-actions">
-                <Button
-                  primary={catalogueTab === "manual"}
-                  onClick={() => setCatalogueTab("manual")}
-                >
-                  {t("All receipts", "Semua penerimaan")}
-                </Button>
-                <Button
-                  primary={catalogueTab === "po"}
-                  onClick={() => setCatalogueTab("po")}
-                >
-                  {t("Purchase orders", "PO")}
-                </Button>
-              </div>
-            )}
-            {route !== "receiving" || catalogueTab === "po" ? (
-              <>
+            <div className="workflow-actions">
                 <Button
                   primary
                   disabled={user.role === "viewer"}
@@ -878,6 +873,28 @@ export function StockWorkspace(props: any) {
                     ? t("Receive goods", "Terima barang")
                     : t("New request", "Permintaan baru")}
                 </Button>
+              {draftControl}
+            {route === "receiving" && (
+              <div className="workflow-tabs">
+                <Button
+                  aria-pressed={catalogueTab === "manual"}
+                  onClick={() => setCatalogueTab("manual")}
+                >
+                  {t("All receipts", "Semua penerimaan")}
+                </Button>
+                <Button
+                  aria-pressed={catalogueTab === "po"}
+                  onClick={() => setCatalogueTab("po")}
+                >
+                  {t("Purchase orders", "PO")}
+                </Button>
+              </div>
+            )}
+            </div>
+            {["receiving", "shipping"].includes(route) && <p className="export-guidance">{t("Select a document to export its PDF from the side panel.", "Pilih dokumen untuk mengekspor PDF dari panel samping.")}</p>}
+            {route !== "receiving" || catalogueTab === "po" ? (
+              <>
+
                 <WorkQueue
                   items={legacyRows}
                   products={props.data.products}
@@ -1013,24 +1030,7 @@ export function StockWorkspace(props: any) {
                       ))}
                     </select>
                   </Field>
-                  <Button
-                    primary
-                    disabled={user.role === "viewer"}
-                    onClick={() =>
-                      open({
-                        action: ["receiving", "quality", "putaway"].includes(
-                          route,
-                        )
-                          ? "receive"
-                          : "new-order",
-                      })
-                    }
-                  >
-                    <Plus size={18} />
-                    {["receiving", "quality", "putaway"].includes(route)
-                      ? t("Receive goods", "Terima barang")
-                      : t("New request", "Permintaan baru")}
-                  </Button>
+
                 </div>
                 <p className="muted">
                   {t(
@@ -1125,15 +1125,7 @@ export function StockWorkspace(props: any) {
             )}
           </>
         )}
-        <Button
-          hidden={!!context}
-          onClick={() => {
-            open({ action: "receive" });
-            void showDrafts();
-          }}
-        >
-          {t("Open my saved drafts", "Buka draf tersimpan saya")}
-        </Button>
+
       </div>
       {context && (
         <aside
@@ -1193,6 +1185,15 @@ export function StockWorkspace(props: any) {
             disabled={busy}
             aria-busy={loading || busy}
           >
+            {!draftList && !newItem && !review && doc && (
+                    <ExportPanel
+                      warehouse={warehouse}
+                      user={user}
+                      options={exportOptions}
+                      request={{ documentId: doc.id, version: doc.version }}
+                      context={JSON.stringify([context, doc.version])}
+                    />
+            )}
             {error && (
               <Notice kind="error">
                 {error}
@@ -2144,13 +2145,7 @@ export function StockWorkspace(props: any) {
               <>
                 {doc && (
                   <>
-                    <ExportPanel
-                      warehouse={warehouse}
-                      user={user}
-                      options={exportOptions}
-                      request={{ documentId: doc.id, version: doc.version }}
-                      context={JSON.stringify([context, doc.version])}
-                    />
+
                     <DocumentDates
                       row={doc}
                       warehouse={warehouse}

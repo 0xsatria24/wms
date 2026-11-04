@@ -52,6 +52,7 @@ export function Stock({
   authMode,
   onProcess = undefined,
   onReceive = undefined,
+  draftControl = undefined,
 }) {
   const t = useText();
   const canManage = user.role === 'admin' || user.role === 'supervisor';
@@ -202,6 +203,11 @@ export function Stock({
     <>
       <div className="stock-toolbar">
         {onReceive && <Button primary disabled={user.role === "viewer"} onClick={onReceive}>{t("Receive goods", "Terima barang")}</Button>}
+          <ExportPanel warehouse={warehouse} user={user} context={bulk.token} disabled={!!setCatalogueQuery && !server} request={{ query: search, location: loc, condition, status: stockStatus, sort, descending }} options={[
+            { type: "stock", label: t("All matching stock", "Semua stok sesuai filter"), request: { scope: "all" } },
+            ...(bulk.selectedRows.length ? [{ type: "stock", label: t("Selected stock", "Stok terpilih"), request: { scope: "selected", ids: bulk.selectedRows.map(row => row.sku) }, estimate: bulk.selectedRows.reduce((sum, row) => sum + row.rows.length, 0) }] : []),
+          ]} />
+        {draftControl}
         <div className="search">
           <MagnifyingGlass size={20} aria-hidden="true" />
           <Field
@@ -348,10 +354,7 @@ export function Stock({
               </select>
             </Field>
           </div>
-          <ExportPanel warehouse={warehouse} user={user} context={bulk.token} disabled={!!setCatalogueQuery && !server} request={{ query: search, location: loc, condition, status: stockStatus, sort, descending }} options={[
-            { type: "stock", label: t("All matching stock", "Semua stok sesuai filter"), request: { scope: "all" } },
-            ...(bulk.selectedRows.length ? [{ type: "stock", label: t("Selected stock", "Stok terpilih"), request: { scope: "selected", ids: bulk.selectedRows.map(row => row.sku) }, estimate: bulk.selectedRows.reduce((sum, row) => sum + row.rows.length, 0) }] : []),
-          ]} />
+
           <div
             className="stock-group-scroll"
             role="region"
