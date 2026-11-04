@@ -21,6 +21,10 @@ Format enam dokumen mengikuti gambar yang dibagikan pengguna pada chat **Ingatka
 
 Dokumen tambahan: [PRD Tracker Barang Masuk dan Keluar (Barcode / RFID)](prd-tracker-barcode-rfid.md). PRD ini merinci identitas barang, alur scan, konfirmasi, pengecualian, pilihan teknologi dan kriteria penerimaan. Barcode menjadi usulan MVP; RFID memerlukan pilot fisik. Seluruhnya masih berupa kebutuhan, bukan fitur yang sudah diimplementasikan. Dokumen ini melengkapi enam dokumen utama dan memakai Inventory Core yang sama.
 
+## PRD tambahan export operasional
+
+[PRD Export laporan dan dokumen operasional](prd-export-operasional.md), versi 0.1 tanggal 4 November 2026, mencakup posisi stok, kartu stok, opname, packing/pengiriman, penerimaan, transfer, dan retur. Dokumen menetapkan format XLSX/CSV/PDF, lingkup filter/pilihan, hak akses, proteksi blind count, bukti transaksi parsial, dan kriteria penerimaan. Pengguna menyetujui implementasi pada 4 November 2026; hasilnya dicatat pada [catatan implementasi export](../implementation/operational-export.md). Pemeriksaan kondisi awal di PRD mengacu ke kode saat penyusunan, sedangkan paket perencanaan utama di atas menyimpan konteks awal 28 Oktober 2026.
+
 ## Acuan rekayasa
 
 **Software Requirements Engineering.** Mengacu pada [ISO/IEC/IEEE 29148:2018](https://www.iso.org/standard/72089.html), untuk memperjelas kebutuhan, fitur, batasan dan kriteria penerimaan sebelum coding, lalu mengelola perubahan kebutuhan selama pengembangan.

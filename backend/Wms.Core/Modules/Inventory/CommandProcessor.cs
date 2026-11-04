@@ -74,6 +74,15 @@ public sealed partial class CommandProcessor(WmsDb db)
         db.ChangeTracker.DetectChanges();
         foreach (var entry in db.ChangeTracker.Entries<OperationalDocument>().Where(e => e.State == EntityState.Modified))
             entry.Entity.Version++;
+        var exportDocuments = db.ChangeTracker.Entries<OperationalDocument>()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified)
+            .Select(e => e.Entity.Id).ToArray();
+        if (exportDocuments.Length > 0)
+            db.SupportingRecords.Add(new SupportingRecord
+            {
+                Id = ReferenceId.New(), WarehouseId = actor.WarehouseId, Kind = "export-evidence",
+                PayloadJson = JsonSerializer.Serialize(new { transactionId, kind = input.Type, documentIds = exportDocuments, actor = actor.Id, postedAt = now })
+            });
         foreach (var entry in db.ChangeTracker.Entries<StockPosition>().Where(e => e.State == EntityState.Modified))
             entry.Entity.Version++;
         var result = new CommandResult(transactionId, "recorded", input.Type, now);

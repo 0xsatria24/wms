@@ -596,7 +596,6 @@ function Application({ locale, setLocale }) {
               <details
                 key={group}
                 open={screen?.[6] === group}
-                name="workspace-navigation"
               >
                 <summary>
                   {title}
