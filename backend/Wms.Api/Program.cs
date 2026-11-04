@@ -19,6 +19,7 @@ using Wms.Modules.Inventory;
 using Wms.Modules.Reporting;
 using Wms.Modules.Integration;
 using Wms.Modules.Settings;
+using Wms.Modules.Workflow;
 using Wms.Shared;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
@@ -243,6 +244,7 @@ app.MapPost("/api/commands", async (CommandRequest request, HttpContext context,
 {
     var actor = await access.Resolve(context.User, request.Warehouse, ct);
     Rules.Require(request.PrincipalId == actor.Id, "pending-owner", 403);
+    if (request.Type is "manual-receive" or "relocate" or "reserve-plan") Rules.Require(builder.Configuration.GetValue<bool?>("Workflow:Enabled") != false, "workflow-disabled", 503);
     var key = context.Request.Headers["Idempotency-Key"].ToString();
     var result = await commands.Handle(actor, request, key, ct);
     await hub.Clients.Group($"warehouse:{actor.WarehouseId}").SendAsync("WorkspaceChanged", new
@@ -359,5 +361,6 @@ if (builder.Configuration.GetValue<bool>("Hosting:ServeFrontend"))
             await context.Response.SendFileAsync(index, context.RequestAborted);
     });
 }
+app.MapWorkflowEndpoints();
 app.Run();
 public partial class Program;

@@ -28,8 +28,10 @@ import { BulkActions } from "./BulkActions";
 import { downloadLabelSheet } from "./bulk-files";
 import { itemCatalogPage } from "./item-catalog";
 import { canRetryEvent } from "./bulk-model";
+import { canRecoverPending, generateLabelWithHistory, pendingBusinessSummary, recordGeneratedLabel } from "./support-model";
 
 function LabelPreview({ code, name, labelRef }) {
+  const t = useText();
   useEffect(() => {
     if (labelRef.current)
       JsBarcode(labelRef.current, code, {
@@ -47,10 +49,10 @@ function LabelPreview({ code, name, labelRef }) {
       <strong>{name}</strong>
       <canvas
         ref={labelRef}
-        aria-label={`Internal Code 128 barcode: ${code}`}
+        aria-label={t(`Internal Code 128 barcode: ${code}`, `Barcode Code 128 internal: ${code}`)}
         role="img"
       />
-      <small>Internal use only · Code 128</small>
+      <small>{t("Internal use only · Code 128", "Hanya untuk internal · Code 128")}</small>
     </div>
   );
 }
@@ -59,6 +61,7 @@ export function Controls({
   route,
   data,
   setData,
+  persistData = setData,
   warehouse,
   user,
   go,
@@ -84,8 +87,17 @@ export function Controls({
   const [supportingPage, setSupportingPage] = useState(1);
   const [tab, setTab] = useState("labels");
   const [labelPage, setLabelPage] = useState(1);
+  const [eventStatus, setEventStatus] = useState("needs-attention");
+  const [packagesQuery, setPackagesQuery] = useState("");
+  const [packagesPage, setPackagesPage] = useState(1);
+  const [packageId, setPackageId] = useState("");
+  const [labelOutcome, setLabelOutcome] = useState(null);
+  const [recoveryOutcome, setRecoveryOutcome] = useState(null);
+  const [checkedPending, setCheckedPending] = useState<string[]>([]);
+  const [caseReference, setCaseReference] = useState("");
+  const [querySubmission, setQuerySubmission] = useState(0);
   const labelsView = route === "labels" && tab === "labels";
-  const server = useServerCatalogue(data, setCatalogueQuery, { view: labelsView ? "master" : route, query, ...(labelsView ? { status: "active", sort: "sku" } : {}), sku: ["movements", "tracking"].includes(route) ? sku : "", focusSku: sku, location: loc, from: fromDate, to: toDate, page: labelsView ? labelPage : ledgerPage, pageSize: 25, supportingPage });
+  const server = useServerCatalogue(data, setCatalogueQuery, { view: labelsView ? "master" : route, query, ...(labelsView ? { status: "active", sort: "sku" } : route === "integration" ? { status: eventStatus } : {}), sku: ["movements", "tracking"].includes(route) ? sku : "", focusSku: sku, location: loc, from: fromDate, to: toDate, page: labelsView ? labelPage : ledgerPage, pageSize: 25, supportingPage, packagesQuery, packagesPage }, querySubmission);
   useEffect(() => setLedgerPage(1), [sku, query, loc, fromDate, toDate]);
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState(null);
@@ -97,14 +109,15 @@ export function Controls({
   const [excluded, setExcluded] = useState({});
   const [fallback, setFallback] = useState("");
   const [note, setNote] = useState("");
+  useEffect(() => { setModal(null); setSelected(null); setLabelOutcome(null); setRecoveryOutcome(null); setCheckedPending([]); }, [user.id, user.role, warehouse, route]);
   const labelCatalogue = itemCatalogPage(server && labelsView ? data.products.filter(row => server.ids.includes(row.sku)) : data.products, { query: labelsView ? query : "", status: "active", category: "", sort: "sku", page: setCatalogueQuery ? 1 : labelPage, pageSize: 25 });
   const labelPaging = server && labelsView ? server : labelCatalogue;
   const expectedTags = ["EPC-SIM-001", "EPC-SIM-002", "EPC-SIM-003"];
   const bulkRows = route === "integration" ? data.events.filter(row => (row.warehouse || MAIN) === warehouse) : route === "pending" ? data.pending.filter(row => row.request.warehouse === warehouse && row.request.user === user.id) : labelsView ? labelCatalogue.rows : route === "rfid" ? [...new Set<string>(reads)].map(code => ({ id: code, code })) : [];
-  const bulk = useBulkSelection({ rows: bulkRows, scope: JSON.stringify([user.id, user.role, warehouse, route, tab, query, labelPage]), key: row => labelsView ? row.sku : row.id, label: row => labelsView ? `${row.name} · ${row.sku}` : row.id, allowed: row => route === "integration" ? canRetryEvent(row, user) : route === "rfid" ? !expectedTags.includes(row.code) && !excluded[row.code] : labelsView ? ["admin", "supervisor", "operator"].includes(user.role) && row.active : true, disabled: !!setCatalogueQuery && !server || route === "rfid" && reading || labelsView && !editRecord || route === "integration" && !bulkCommand || route === "pending" && !recoverRequest });
+  const bulk = useBulkSelection({ rows: bulkRows, scope: JSON.stringify([user.id, user.role, warehouse, route, tab, query, labelPage, ledgerPage, eventStatus]), key: row => labelsView ? row.sku : row.id, label: row => labelsView ? `${row.name} · ${row.sku}` : row.id, allowed: row => route === "integration" ? canRetryEvent(row, user) : route === "rfid" ? !expectedTags.includes(row.code) && !excluded[row.code] : labelsView ? ["admin", "supervisor", "operator"].includes(user.role) && row.active && !!row.barcode : ["send", "check"].some(intent => canRecoverPending(intent, row, user, warehouse)), disabled: !!setCatalogueQuery && !server || route === "rfid" && reading || labelsView && !editRecord || route === "integration" && !bulkCommand || route === "pending" && !recoverRequest });
   const afterBulk = async () => { await refresh?.(); };
   const labelRef = useRef<HTMLCanvasElement>(null);
-  const product = data.products.find((p) => p.sku === sku) || data.products[0];
+  const product = data.products.find((p) => p.sku === sku) || { sku, name: sku, barcode: "", active: false, unit: "", version: null };
   const ledgerSources = data.ledger.filter(
     (m) =>
       m.warehouse === warehouse &&
@@ -115,12 +128,13 @@ export function Controls({
       (!toDate ||
         localDate(m.posted, zone) <= toDate),
   );
-  const ledger = ledgerSources.filter((m) =>
+  const ledger = setCatalogueQuery ? data.ledger : ledgerSources.filter((m) =>
     `${m.source} ${m.kind} ${m.id} ${m.transaction}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
-  const itemSelect = <Field label={t("Item", "Barang")} value={sku} onValueChange={setSku} suggestions={productSuggestions(data.products)} />;
+  const submitRead = event => { if (event.key === "Enter") { event.preventDefault(); setQuerySubmission(value => value + 1); } };
+  const itemSelect = <Field label={t("Item", "Barang")} value={sku} onValueChange={setSku} onKeyDown={submitRead} suggestions={productSuggestions(data.products)} />;
   const titleColumns = [
     { key: "id", label: t("Reference", "Referensi") },
     { key: "type", label: t("Type", "Jenis") },
@@ -133,6 +147,23 @@ export function Controls({
     <Button onClick={() => { setFromDate(""); setToDate(""); }}>{t("All dates", "Semua tanggal")}</Button>
   </div>;
   const supportingPaging = setCatalogueQuery ? data.supportingPage : null;
+  const canOperate = ["admin", "supervisor", "operator"].includes(user.role);
+  const canIdentify = ["admin", "supervisor"].includes(user.role);
+  const recover = async (row, intent) => {
+    const current = data.pending.find(p => p.id === row.id);
+    if (saving || !recoverRequest || !canRecoverPending(intent, current, user, warehouse)) return;
+    setSaving(true);
+    try {
+      const result = await recoverRequest(row.id, intent);
+      if (intent === "check") setCheckedPending(ids => [...new Set([...ids, row.id])]);
+      setRecoveryOutcome({ id: row.id, status: result?.status || "success", message: result?.message });
+      if (!result?.status || result.status === "success") setModal(null);
+      await refresh?.();
+    } catch (error) {
+      setRecoveryOutcome({ id: row.id, status: "error", message: error.message });
+    } finally { setSaving(false); }
+  };
+  const pendingLabel = key => ({ document: t("Document", "Dokumen"), order: t("Order", "Pesanan"), task: t("Task", "Tugas"), source: t("Source", "Sumber"), sku: "SKU", qty: t("Quantity", "Jumlah"), from: t("From", "Dari"), to: t("To", "Ke"), location: t("Location", "Lokasi") })[key] || key;
   if (
     !data.products.length &&
     ["movements", "tracking", "labels", "rfid"].includes(route)
@@ -161,27 +192,6 @@ export function Controls({
         />
       </Panel>
     );
-  if (route === "labels" && tab === "packaging" && !data.packages.length)
-    return (
-      <Panel title={t("Labels and packaging", "Label dan kemasan")}>
-        <Tabs
-          label={t("Workspace", "Ruang kerja")}
-          items={[
-            ["labels", t("Labels", "Label")],
-            ["packaging", t("Packaging", "Kemasan")],
-            ["devices", t("Devices", "Perangkat")],
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
-        <Empty
-          title={t(
-            "No packages in this warehouse",
-            "Belum ada kemasan di gudang ini",
-          )}
-        />
-      </Panel>
-    );
   const sourceRoute = (type) =>
     ({
       receive: "receiving",
@@ -198,12 +208,16 @@ export function Controls({
     })[type] || "movements";
   if (route === "integration") {
     const events = data.events.filter(
-      (e) => (e.warehouse || MAIN) === warehouse,
+      (e) => (e.warehouse || MAIN) === warehouse && (setCatalogueQuery || (!eventStatus || (eventStatus === "needs-attention" ? e.business !== "accepted" : e.transport === eventStatus || e.business === eventStatus))) && (setCatalogueQuery || `${e.id} ${e.source} ${e.transport} ${e.business}`.toLowerCase().includes(query.toLowerCase())),
     );
     const event = events.find((e) => e.id === selected) || events[0];
     return (
       <div className="stack">
         <Panel title={t("Integration events", "Event integrasi")}>
+          <div className="filter-bar">
+            <Field label={t("Find event or source transaction", "Cari event atau transaksi sumber")} type="search" value={query} onKeyDown={submitRead} onChange={e => { setQuery(e.target.value); setLedgerPage(1); }} />
+            <Field label={t("Event status", "Status event")}><select value={eventStatus} onChange={e => { setEventStatus(e.target.value); setLedgerPage(1); }}><option value="needs-attention">{t("Needs attention", "Perlu tindak lanjut")}</option><option value="">{t("All events", "Semua event")}</option>{["pending", "failed", "unknown", "accepted", "acknowledged"].map(value => <option key={value}>{value}</option>)}</select></Field>
+          </div>
           <BulkActions selection={bulk} actions={[{ id: "retry", label: t("Retry selected events", "Coba ulang event terpilih"), description: t("Schedules the original events again. WMS stock is not reposted.", "Menjadwalkan ulang event asal. Stok WMS tidak dicatat ulang."), perform: async row => bulkCommand("erp-retry", { event: row.id }), after: afterBulk }]} />
           <DataTable
             label={t("ERP events", "Event ERP")}
@@ -238,6 +252,7 @@ export function Controls({
               },
             ]}
           />
+          {data.eventPage && <nav className="catalogue-pagination" aria-label={t("Integration event pages", "Halaman event integrasi")} aria-busy={loadingSupporting}><span role="status">{loadingSupporting ? t("Loading events…", "Memuat event…") : t(`Page ${data.eventPage.page} of ${data.eventPage.pages} · ${data.eventPage.total} events`, `Halaman ${data.eventPage.page} dari ${data.eventPage.pages} · ${data.eventPage.total} event`)}</span><Button disabled={loadingSupporting || data.eventPage.page <= 1} onClick={() => setLedgerPage(data.eventPage.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button><Button disabled={loadingSupporting || data.eventPage.page >= data.eventPage.pages} onClick={() => setLedgerPage(data.eventPage.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button></nav>}
         </Panel>
         {event && (
           <Panel title={t("Event detail", "Detail event")}>
@@ -265,9 +280,9 @@ export function Controls({
               <Button
                 primary
                 disabled={
-                  event.transport === "acknowledged" || user.role === "operator"
+                  loadingSupporting || !canRetryEvent(event, user)
                 }
-                onClick={() =>
+                onClick={() => canRetryEvent(event, user) && !loadingSupporting &&
                   ask("erp-retry", { event: event.id }, [
                     [t("Same event", "Event yang sama"), event.id],
                     [t("Stock effect", "Dampak stok"), t("None", "Tidak ada")],
@@ -330,6 +345,7 @@ export function Controls({
             )}
             onValueChange={setQuery}
             type="search"
+            onKeyDown={submitRead}
           />
           <Field
             label={t(`From date (${zone})`, `Dari tanggal (${zone})`)}
@@ -351,7 +367,7 @@ export function Controls({
             [t("Item", "Barang"), `${product.name} · ${sku}`],
             [
               t("Net movement in filter", "Mutasi bersih pada filter"),
-              `${ledger.reduce((n, m) => n + m.qty, 0)} ${t("units", "unit")}`,
+              setCatalogueQuery ? loadingSupporting ? t("Loading aggregate…", "Memuat total…") : (data.ledgerSummary?.quantities || []).map(row => `${row.qty} ${row.unit}`).join(" · ") || `0 ${product.unit || t("units", "unit")}` : `${ledger.reduce((n, m) => n + m.qty, 0)} ${product.unit || t("units", "unit")}`,
             ],
             [t("Warehouse", "Gudang"), warehouse],
           ]}
@@ -370,7 +386,7 @@ export function Controls({
             { key: "location", label: t("Location", "Lokasi") },
             {
               key: "qty",
-              label: t("Quantity (units)", "Jumlah (unit)"),
+              label: t("Quantity", "Jumlah"),
               numeric: true,
               render: (r) => (
                 <span
@@ -378,6 +394,7 @@ export function Controls({
                 >
                   {r.qty > 0 ? "+" : ""}
                   {r.qty}
+                  {` ${r.unit || product.unit || t("units", "unit")}`}
                 </span>
               ),
             },
@@ -414,7 +431,7 @@ export function Controls({
                 [t("Actor", "Pelaku"), modal.user],
                 [t("Occurred at", "Waktu kejadian"), ts(modal.occurred)],
                 [t("Posted at", "Waktu pencatatan"), ts(modal.posted)],
-                [t("Actual", "Aktual"), `${modal.qty} ${t("units", "unit")}`],
+                [t("Actual", "Aktual"), `${modal.qty} ${modal.unit || product.unit || t("units", "unit")}`],
               ]}
             />
             <Button
@@ -443,10 +460,13 @@ export function Controls({
             "Offline berarti belum dikirim. Hasil belum jelas berarti server mungkin sudah mencatatnya. Retry mempertahankan ID dan isi asal.",
           )}
         </Notice>
+        {recoveryOutcome && <Notice kind={recoveryOutcome.status === "success" ? "success" : recoveryOutcome.status === "pending" ? "warning" : "error"} title={<Reference value={recoveryOutcome.id} />}>
+          {recoveryOutcome.status === "success" ? t("The original request is confirmed by the server.", "Permintaan asal dikonfirmasi oleh server.") : recoveryOutcome.status === "pending" ? recoveryOutcome.message === "offline" ? t("Not sent. Restore the connection, then send the original request.", "Belum dikirim. Pulihkan koneksi, lalu kirim permintaan asal.") : t("The outcome is still unknown. A missing result does not prove failure. Check again or explicitly review retry of the original request.", "Hasil masih belum jelas. Hasil yang belum ditemukan bukan bukti gagal. Periksa kembali atau tinjau coba ulang permintaan asal.") : errorText(recoveryOutcome.message, t)}
+        </Notice>}
         <BulkActions selection={bulk} actions={[
-          { id: "send", label: t("Send selected unsent requests", "Kirim permintaan belum terkirim"), allowed: row => row.status === "offline", description: t("Uses each original request ID, payload and version. Requests are sent in order.", "Memakai ID, isi, dan versi permintaan asal. Permintaan dikirim berurutan."), perform: async row => recoverRequest(row.id, "send"), after: afterBulk },
-          { id: "check", label: t("Check selected unknown requests", "Periksa hasil yang belum jelas"), allowed: row => row.status === "unknown", description: t("Checks the original requests before any resend. No new request ID is created.", "Memeriksa permintaan asal sebelum pengiriman ulang. Tidak membuat ID permintaan baru."), perform: async row => recoverRequest(row.id, "check"), after: afterBulk },
-          { id: "retry-original", label: t("Retry selected original requests", "Coba ulang permintaan asal terpilih"), allowed: row => row.status === "unknown", description: t("Explicitly resends the original request with the same ID, payload and version. The original identity prevents recording the same transaction twice.", "Mengirim ulang permintaan asal dengan ID, isi, dan versi yang sama. Identitas asal mencegah transaksi yang sama dicatat dua kali."), perform: async row => recoverRequest(row.id, "retry"), after: afterBulk },
+          { id: "send", label: t("Send selected unsent requests", "Kirim permintaan belum terkirim"), allowed: row => canRecoverPending("send", row, user, warehouse), description: t("Uses each original request ID, payload and version. Requests are sent in order.", "Memakai ID, isi, dan versi permintaan asal. Permintaan dikirim berurutan."), perform: async row => recoverRequest(row.id, "send"), after: afterBulk },
+          { id: "check", label: t("Check selected unknown requests", "Periksa hasil yang belum jelas"), allowed: row => canRecoverPending("check", row, user, warehouse), description: t("Checks the original requests before any resend. No new request ID is created.", "Memeriksa permintaan asal sebelum pengiriman ulang. Tidak membuat ID permintaan baru."), perform: async row => { const result = await recoverRequest(row.id, "check"); setCheckedPending(ids => [...new Set([...ids, row.id])]); return result; }, after: afterBulk },
+          { id: "retry-original", label: t("Retry selected original requests", "Coba ulang permintaan asal terpilih"), allowed: row => checkedPending.includes(row.id) && canRecoverPending("retry", row, user, warehouse), description: t("After checking, explicitly resend the original ID, payload and version. A missing result does not prove failure.", "Setelah diperiksa, kirim ulang ID, isi, dan versi asal secara eksplisit. Hasil belum ditemukan bukan bukti gagal."), perform: async row => recoverRequest(row.id, "retry"), after: afterBulk },
         ]} />
         <DataTable
           label={t("Pending requests", "Permintaan tertunda")}
@@ -457,6 +477,11 @@ export function Controls({
             "Tidak ada permintaan tertunda untuk pengguna dan gudang ini.",
           )}
           columns={[
+            {
+              key: "summary",
+              label: t("Business request", "Permintaan bisnis"),
+              render: row => pendingBusinessSummary(row).map(([key, value]) => `${pendingLabel(key)}: ${value}`).join(" · ") || t("Open request details", "Buka detail permintaan"),
+            },
             {
               key: "id",
               label: t("Request ID", "ID permintaan"),
@@ -494,9 +519,9 @@ export function Controls({
               key: "action",
               label: t("Recovery", "Pemulihan"),
               render: (r) => (
-                <Button primary onClick={() => checkPending(r.id)}>
+                <Button primary disabled={saving || bulk.busy || !canRecoverPending(r.status === "offline" ? "send" : "check", r, user, warehouse)} onClick={() => r.status === "offline" ? setModal(r) : recover(r, "check")}>
                   {r.status === "offline"
-                    ? t("Send original request", "Kirim permintaan asal")
+                    ? t("Review original request", "Tinjau permintaan asal")
                     : t("Check same request", "Periksa permintaan sama")}
                 </Button>
               ),
@@ -517,15 +542,21 @@ export function Controls({
                 [t("Captured on device", "Dicatat di perangkat"), ts(modal.created)],
                 [t("Occurred at", "Waktu kejadian"), ts(modal.request.occurredAt)],
                 [t("Server confirmed", "Dikonfirmasi server"), t("Not confirmed yet", "Belum dikonfirmasi")],
+                ...pendingBusinessSummary(modal).map(([key, value]) => [pendingLabel(key), value]),
               ]}
             />
             <pre>{JSON.stringify(modal.request.payload, null, 2)}</pre>
             <Notice>
-              {t(
+              {modal.status === "offline" ? t("This is the captured request. Sending preserves its original ID, payload and version.", "Ini permintaan yang telah dicatat. Pengiriman mempertahankan ID, isi, dan versi asal.") : t(
                 "This payload cannot be edited while its outcome is unknown.",
                 "Isi ini tidak bisa diedit selama hasilnya belum jelas.",
               )}
             </Notice>
+            {recoveryOutcome?.id === modal.id && recoveryOutcome.status !== "success" && <Notice kind={recoveryOutcome.status === "pending" ? "warning" : "error"}>{recoveryOutcome.status === "pending" ? t("The original outcome is still unknown. Keep its ID and check again before retrying.", "Hasil asal masih belum jelas. Pertahankan ID dan periksa kembali sebelum mencoba ulang.") : errorText(recoveryOutcome.message, t)}</Notice>}
+            <div className="form-actions">
+              <Button primary disabled={saving || !canRecoverPending(modal.status === "offline" ? "send" : "check", data.pending.find(row => row.id === modal.id), user, warehouse)} onClick={() => recover(modal, modal.status === "offline" ? "send" : "check")}>{modal.status === "offline" ? t("Send original request", "Kirim permintaan asal") : t("Check original request", "Periksa permintaan asal")}</Button>
+              {modal.status === "unknown" && checkedPending.includes(modal.id) && <Button disabled={saving || !canRecoverPending("retry", data.pending.find(row => row.id === modal.id), user, warehouse)} onClick={() => recover(modal, "retry")}>{t("Retry original ID and payload", "Coba ulang ID dan isi asal")}</Button>}
+            </div>
           </Modal>
         )}
       </Panel>
@@ -630,9 +661,11 @@ export function Controls({
         <Panel title={t("Case follow-up", "Tindak lanjut kasus")}>
           <form
             className="stack"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              setData((s) => ({
+              if (saving || !canOperate || !note.trim() || !caseReference.trim()) return;
+              setSaving(true);
+              const saved = await persistData((s) => ({
                 ...s,
                 followups: [
                   ...(s.followups || []),
@@ -640,19 +673,23 @@ export function Controls({
                     user: user.id,
                     warehouse,
                     note,
+                    caseReference: caseReference.trim(),
                     stamp: new Date().toISOString(),
                   },
                 ],
               }));
+              setSaving(false);
+              if (!saved) return;
               setNote("");
               flash(
                 t(
-                  "Follow-up recorded locally.",
-                  "Tindak lanjut dicatat lokal.",
+                  "Follow-up saved for the original case.",
+                  "Tindak lanjut tersimpan untuk kasus asal.",
                 ),
               );
             }}
           >
+            <Field label={t("Original case reference", "Referensi kasus asal")} value={caseReference} onChange={e => setCaseReference(e.target.value)} required disabled={saving || !canOperate} />
             <Field
               label={t(
                 "Owner and follow-up note (required)",
@@ -662,12 +699,12 @@ export function Controls({
               onChange={(e) => setNote(e.target.value)}
               required
             />
-            <Button primary type="submit">
+            <Button primary type="submit" disabled={saving || !canOperate}>
               {t("Record follow-up", "Catat tindak lanjut")}
             </Button>
           </form>
           <DataTable label={t("Recorded follow-ups", "Tindak lanjut tercatat")} rows={(data.followups || []).filter(n => n.warehouse === warehouse)}
-            columns={[{ key: "user", label: t("User", "Pengguna") }, { key: "note", label: t("Note", "Catatan") }, { key: "stamp", label: t("Recorded at", "Waktu pencatatan"), render: row => <TableTimestamp value={row.stamp} /> }]}
+            columns={[{ key: "caseReference", label: t("Original case", "Kasus asal") }, { key: "user", label: t("User", "Pengguna") }, { key: "note", label: t("Note", "Catatan") }, { key: "stamp", label: t("Recorded at", "Waktu pencatatan"), render: row => <TableTimestamp value={row.stamp} /> }]}
             empty={t("No follow-ups recorded.", "Belum ada tindak lanjut tercatat.")} />
           {supportingPaging && (
             <nav className="catalogue-pagination" aria-label={t("Follow-up pages", "Halaman tindak lanjut")} aria-busy={loadingSupporting}>
@@ -732,6 +769,7 @@ export function Controls({
             )}
             value={query}
             type="search"
+            onKeyDown={submitRead}
             onChange={(e) => setQuery(e.target.value)}
           />
           <DataTable
@@ -756,8 +794,8 @@ export function Controls({
             ]}
           />
         </Panel>
-        {positions.length > 0 && (
-          <Panel title={`${product.name} · ${sku}`}>
+        {sku && (
+          <Panel title={`${data.products.find(row => row.sku === sku)?.name || sku} · ${sku}`}>
             <div className="tracking-summary">
               <div>
                 <h3>
@@ -765,9 +803,10 @@ export function Controls({
                 </h3>
                 {positions.map((p) => (
                   <p key={`${p.location}${p.hold}`}>
-                    {p.location} · {p.condition} · {p.qty} {t("units", "unit")}
+                    {p.location} · {p.condition} · {p.qty} {product.unit || t("units", "unit")}
                   </p>
                 ))}
+                {!positions.length && <p>{t("No physical stock remains. Posted history is still available.", "Tidak ada stok fisik tersisa. Riwayat tercatat tetap tersedia.")}</p>}
               </div>
               <div>
                 <h3>
@@ -809,6 +848,7 @@ export function Controls({
                 },
               ]}
             />
+            {data.ledgerPage && <nav className="catalogue-pagination" aria-label={t("Item history pages", "Halaman riwayat barang")}><Button disabled={loadingSupporting || data.ledgerPage.page <= 1} onClick={() => setLedgerPage(data.ledgerPage.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button><span>{t(`Page ${data.ledgerPage.page} of ${data.ledgerPage.pages} · ${data.ledgerPage.total} movements`, `Halaman ${data.ledgerPage.page} dari ${data.ledgerPage.pages} · ${data.ledgerPage.total} mutasi`)}</span><Button disabled={loadingSupporting || data.ledgerPage.page >= data.ledgerPage.pages} onClick={() => setLedgerPage(data.ledgerPage.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button></nav>}
             <a href="#movements">
               {t("Open stock movements", "Buka kartu stok")}
             </a>
@@ -818,7 +858,9 @@ export function Controls({
     );
   }
   if (route === "labels") {
-    const pkg = data.packages[0];
+    const packages = data.packages.filter(row => !row.warehouse || row.warehouse === warehouse).filter(row => setCatalogueQuery || `${row.id} ${row.items.map(item => item.sku).join(" ")}`.toLowerCase().includes(packagesQuery.toLowerCase()));
+    const pkg = packages.find(row => row.id === packageId);
+    const packagePaging = setCatalogueQuery ? data.packagePage : null;
     return (
       <Panel
         title={t("Identification and devices", "Identifikasi dan perangkat")}
@@ -836,7 +878,7 @@ export function Controls({
         {tab === "labels" ? (
           <div className="stack">
             <Field label={t("Find items for labels", "Cari barang untuk label")} type="search" value={query} onChange={e => { setQuery(e.target.value); setLabelPage(1); }} />
-            <BulkActions selection={bulk} actions={[{ id: "labels", label: t("Download selected labels", "Unduh label terpilih"), description: t("Creates one printable sheet with one label per selected item. No physical printer is connected.", "Membuat satu lembar siap cetak dengan satu label per barang terpilih. Printer fisik belum terhubung."), perform: async row => editRecord("labelHistory", { sku: row.sku, version: row.version, code: row.barcode, action: "download" }), complete: rows => downloadLabelSheet(rows, locale), after: afterBulk }]} />
+            <BulkActions selection={bulk} actions={[{ id: "labels", label: t("Download selected labels", "Unduh label terpilih"), description: t("Generates one printable sheet, then saves each item's download history. Physical printing is not confirmed.", "Membuat satu lembar siap cetak, lalu menyimpan riwayat unduhan tiap barang. Cetak fisik belum dikonfirmasi."), prepare: rows => downloadLabelSheet(rows, locale), perform: async row => recordGeneratedLabel(() => editRecord("labelHistory", { sku: row.sku, version: row.version, code: row.barcode, action: "download" })), after: afterBulk }]} />
             <div className="bulk-label-table" role="region" tabIndex={0} aria-label={t("Items for label output", "Barang untuk pembuatan label")}><DataTable label={t("Select items for labels", "Pilih barang untuk label")} rows={labelCatalogue.rows} selection={bulk} onSelect={row => setSku(row.sku)} selected={sku} columns={[{ key: "sku", label: "SKU" }, { key: "name", label: t("Item", "Barang") }, { key: "barcode", label: "Barcode" }]} /></div>
             <div className="catalogue-pagination"><Button disabled={bulk.busy || labelPaging.page <= 1 || !!setCatalogueQuery && !server} onClick={() => setLabelPage(labelPaging.page - 1)}>{t("Previous page", "Halaman sebelumnya")}</Button><span>{t(`Page ${labelPaging.page} of ${labelPaging.pages} · ${labelPaging.total} items`, `Halaman ${labelPaging.page} dari ${labelPaging.pages} · ${labelPaging.total} barang`)}</span><Button disabled={bulk.busy || labelPaging.page >= labelPaging.pages || !!setCatalogueQuery && !server} onClick={() => setLabelPage(labelPaging.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button></div>
           <div className="settings-grid">
@@ -854,45 +896,36 @@ export function Controls({
               />
               <Button
                 primary
-                onClick={() => {
+                disabled={saving || loadingSupporting || !canOperate || !editRecord || !product.active || product.sku !== sku}
+                onClick={async () => {
+                  if (saving || loadingSupporting || !canOperate || !product.active || product.sku !== sku) return;
+                  setSaving(true);
+                  const result = await generateLabelWithHistory(() => {
                   const a = document.createElement("a");
                   a.href = labelRef.current.toDataURL("image/png");
                   a.download = `label-${sku}.png`;
                   a.click();
-                  setData((s) => ({
-                    ...s,
-                    labelHistory: [
-                      {
-                        sku,
-                        code: product.barcode,
-                        user: user.id,
-                        warehouse,
-                        action: "download",
-                        stamp: new Date().toISOString(),
-                      },
-                      ...s.labelHistory,
-                    ],
-                  }));
-                  flash(
-                    t(
-                      "Label PNG generated. Physical printing is not confirmed.",
-                      "PNG label dibuat. Cetak fisik belum dikonfirmasi.",
-                    ),
-                  );
+                  }, () => editRecord("labelHistory", { sku, version: product.version, code: product.barcode, action: "download" }));
+                  setLabelOutcome({ ...result, sku, code: product.barcode, version: product.version });
+                  setSaving(false);
                 }}
               >
                 {t("Download printable label", "Unduh label siap cetak")}
               </Button>
               <Button
-                disabled={user.role === "operator"}
+                disabled={saving || loadingSupporting || !canIdentify || !product.barcode}
                 onClick={() => {
-                  setModal({ kind: "replace" });
+                  setModal({ kind: "replace", sku, version: product.version, previous: product.barcode });
                   setCode(product.barcode);
                   setReason("");
                 }}
               >
                 {t("Replace identifier", "Ganti kode identifikasi")}
               </Button>
+              {labelOutcome && <Notice kind={labelOutcome.history === "saved" ? "success" : "warning"}>
+                {labelOutcome.file === "failed" ? t("The label file could not be generated. No download history was saved.", "File label belum dapat dibuat. Riwayat unduhan tidak disimpan.") : labelOutcome.history === "saved" ? t("Label file generated and download history saved. Physical printing is not confirmed.", "File label dibuat dan riwayat unduhan tersimpan. Cetak fisik belum dikonfirmasi.") : t("Label file generated, but its history is not confirmed. The item mapping is unchanged.", "File label dibuat, tetapi riwayatnya belum terkonfirmasi. Pemetaan barang tetap.")}
+                {labelOutcome.file === "generated" && labelOutcome.history === "failed" && <Button disabled={saving || loadingSupporting || !canOperate} onClick={async () => { setSaving(true); try { const result = await recordGeneratedLabel(() => editRecord("labelHistory", { sku: labelOutcome.sku, code: labelOutcome.code, version: labelOutcome.version, action: "download" })); setLabelOutcome(current => ({ ...current, history: result.status === "success" ? "saved" : "failed" })); } catch (error) { flash(errorText(error.message, t), "error"); } finally { setSaving(false); } }}>{t("Retry saving download history", "Coba simpan riwayat unduhan")}</Button>}
+              </Notice>}
               <Notice>
                 {t(
                   "A replacement deactivates the old mapping. Labels and reprints do not change inventory. No hardware printer is connected.",
@@ -900,15 +933,20 @@ export function Controls({
                 )}
               </Notice>
             </div>
-            <LabelPreview
+            {product.barcode ? <LabelPreview
               code={product.barcode}
               name={`${product.name} · ${sku}`}
               labelRef={labelRef}
-            />
+            /> : <Empty title={t("Select a known item to preview its label.", "Pilih barang terdaftar untuk melihat labelnya.")} />}
           </div>
+          <DataTable label={t("Recent label history", "Riwayat label terbaru")} rows={(data.labelHistory || []).filter(row => row.sku === sku && (!row.warehouse || row.warehouse === warehouse)).map((row, index) => ({ ...row, id: row.id || `${row.stamp}-${index}` }))} columns={[{ key: "action", label: t("Action", "Tindakan") }, { key: "code", label: t("Identifier", "Kode identifikasi") }, { key: "user", label: t("User", "Pengguna") }, { key: "stamp", label: t("Saved at", "Waktu tersimpan"), render: row => <TableTimestamp value={row.stamp} /> }]} empty={t("No recent label history for this item.", "Belum ada riwayat label terbaru untuk barang ini.")} />
           </div>
         ) : tab === "packaging" ? (
           <>
+            <Field label={t("Find carton or contained SKU", "Cari karton atau SKU isi")} type="search" value={packagesQuery} onChange={e => { setPackagesQuery(e.target.value); setPackagesPage(1); setPackageId(""); }} />
+            <DataTable label={t("Package catalogue", "Katalog kemasan")} rows={packages} selected={packageId} onSelect={row => setPackageId(row.id)} empty={loadingSupporting ? t("Loading packages…", "Memuat kemasan…") : t("No packages match. Change the search to find another carton.", "Tidak ada kemasan yang cocok. Ubah pencarian untuk mencari karton lain.")} columns={[{ key: "id", label: t("Carton", "Karton") }, { key: "version", label: t("Contents version", "Versi isi"), numeric: true }, { key: "items", label: t("Contained items", "Barang di dalamnya"), render: row => row.items.map(item => item.sku).join(", ") }]} />
+            {packagePaging && <nav className="catalogue-pagination" aria-label={t("Package pages", "Halaman kemasan")} aria-busy={loadingSupporting}><span role="status">{t(`Page ${packagePaging.page} of ${packagePaging.pages} · ${packagePaging.total} packages`, `Halaman ${packagePaging.page} dari ${packagePaging.pages} · ${packagePaging.total} kemasan`)}</span><Button disabled={loadingSupporting || packagePaging.page <= 1} onClick={() => { setPackagesPage(packagePaging.page - 1); setPackageId(""); }}>{t("Previous page", "Halaman sebelumnya")}</Button><Button disabled={loadingSupporting || packagePaging.page >= packagePaging.pages} onClick={() => { setPackagesPage(packagePaging.page + 1); setPackageId(""); }}>{t("Next page", "Halaman berikutnya")}</Button></nav>}
+            {pkg ? <>
             <Summary
               items={[
                 [t("Carton", "Karton"), pkg.id],
@@ -928,10 +966,12 @@ export function Controls({
               ]}
             />
             <Button
-              disabled={user.role === "operator"}
+              disabled={saving || loadingSupporting || !canIdentify}
               onClick={() => {
                 setModal({
                   kind: "package",
+                  packageId: pkg.id,
+                  version: pkg.version,
                   sku: pkg.items[0]?.sku || "",
                   qty: pkg.items[0]?.qty || 0,
                 });
@@ -946,6 +986,7 @@ export function Controls({
                 "Bacaan parent dan child mewakili isi yang sama. Keanggotaan kemasan bukan saldo stok tambahan.",
               )}
             </Notice>
+            </> : <Notice>{t("Select a carton to view or revise its contents.", "Pilih karton untuk melihat atau mengubah isinya.")}</Notice>}
           </>
         ) : (
           <>
@@ -1042,8 +1083,12 @@ export function Controls({
                       );
                       return;
                     }
+                    if (!canIdentify || !product.barcode || loadingSupporting || modal.sku !== sku || modal.version !== product.version || modal.previous !== product.barcode) {
+                      flash(t("The mapping or access changed. Close this review and reopen the current item.", "Pemetaan atau akses berubah. Tutup tinjauan ini dan buka barang terbaru."), "error");
+                      return;
+                    }
                     setSaving(true);
-                    saved = await setData((s) => ({
+                    saved = await persistData((s) => ({
                       ...s,
                       products: s.products.map((p) =>
                         p.sku === sku ? { ...p, barcode: code } : p,
@@ -1063,12 +1108,16 @@ export function Controls({
                       ],
                     }));
                   } else {
-                    if (!pkg.items.some((item) => item.sku === modal.sku)) return;
+                    const currentPackage = packages.find(row => row.id === modal.packageId);
+                    if (!canIdentify || loadingSupporting || !currentPackage || currentPackage.version !== modal.version || !currentPackage.items.some((item) => item.sku === modal.sku)) {
+                      flash(t("The package changed. Close this review and reopen the current package.", "Kemasan berubah. Tutup tinjauan ini dan buka kemasan terbaru."), "error");
+                      return;
+                    }
                     setSaving(true);
-                    saved = await setData((s) => ({
+                    saved = await persistData((s) => ({
                       ...s,
                       packages: s.packages.map((p) =>
-                        p.id === pkg.id
+                        p.id === currentPackage.id
                           ? {
                               ...p,
                               version: p.version + 1,
@@ -1106,11 +1155,11 @@ export function Controls({
                     <Field label={t("Carton item", "Barang dalam karton")}>
                       <Lookup
                         value={modal.sku}
-                        options={pkg.items.map((item) => ({ value: item.sku, label: item.sku }))}
+                        options={(packages.find(row => row.id === modal.packageId)?.items || []).map((item) => ({ value: item.sku, label: item.sku }))}
                         onValueChange={(value) => setModal({
                           ...modal,
                           sku: value,
-                          qty: pkg.items.find((item) => item.sku === value)?.qty || 0,
+                          qty: packages.find(row => row.id === modal.packageId)?.items.find((item) => item.sku === value)?.qty || 0,
                         })}
                       />
                     </Field>

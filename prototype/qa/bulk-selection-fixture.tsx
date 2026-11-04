@@ -132,7 +132,7 @@ function Fixture() {
       window.removeEventListener("fixture-role", roleChange);
     };
   }, []);
-  const user = { ...data.users[0], role };
+  const user = { ...data.users[0], role, adminWarehouses: role === "admin" ? [MAIN] : [] };
   const editRecord = async (type, payload) => {
     setLog((rows) => [...rows, `${type}:${payload.sku || payload.id || ""}`]);
     if (fail && (payload.sku === "SKU-02" || payload.id === "ORDER-02"))
@@ -194,6 +194,7 @@ function Fixture() {
   const props = {
     data,
     setData,
+    persistData: async update => { setData(update); return true; },
     route,
     user,
     warehouse: MAIN,

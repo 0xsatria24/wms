@@ -627,8 +627,8 @@ export function errorText(code, t) {
       "Dokumen ini milik gudang lain.",
     ],
     denied: [
-      "Your current demo role cannot perform this action.",
-      "Peran demo kamu belum bisa melakukan tindakan ini.",
+      "Your role in this warehouse cannot perform this action. Ask an authorized supervisor.",
+      "Peran kamu di gudang ini belum berwenang. Minta bantuan supervisor yang berwenang.",
     ],
     "pending-owner": [
       "Use the original user and warehouse to check this request.",
@@ -646,6 +646,12 @@ export function errorText(code, t) {
       "The record changed. Refresh and review the latest values before confirming again.",
       "Data sudah berubah. Muat ulang dan tinjau nilai terbaru sebelum konfirmasi lagi.",
     ],
+    "item-open-work": ["This item still has physical stock or unfinished work. Complete its receipts, QC, putaway, orders or counts before deactivating.", "Barang masih memiliki stok fisik atau pekerjaan terbuka. Selesaikan penerimaan, QC, simpan ke rak, order atau opname sebelum menonaktifkan."],
+    "ambiguous-item": ["This code matches more than one item. Ask an administrator to resolve the SKU/barcode mapping before receiving.", "Kode ini cocok dengan lebih dari satu barang. Minta admin menyelesaikan mapping SKU/barcode sebelum menerima."],
+    "draft-complete": ["This draft is already recorded. Reopen it to view its original result.", "Draf ini sudah dicatat. Buka kembali untuk melihat hasil aslinya."],
+    "original-request-pending": ["An original request for this document is still pending. Open Pending transactions and check its result first.", "Permintaan asli dokumen ini masih tertunda. Buka Transaksi tertunda dan periksa hasilnya dahulu."],
+    "workflow-disabled": ["New stock workflows are paused by the administrator.", "Alur stok baru sedang dijeda administrator."],
+    "item-mapping": ["The selected master must be active and use the proposed base unit. Review the item mapping.", "Master terpilih harus aktif dan memakai satuan dasar yang diajukan. Tinjau identitas barang."],
     "count-conflict": [
       "Count cannot be posted: check the frozen snapshot and held reservations.",
       "Hasil hitung belum bisa dicatat. Periksa snapshot beku dan reservasi tertahan.",

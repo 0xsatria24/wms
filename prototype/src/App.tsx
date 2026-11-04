@@ -32,6 +32,8 @@ import { Auth, Workspace } from "./account.tsx";
 import { SetupGate } from "./SetupWizard";
 import { Settings } from "./Settings";
 import { Stock } from "./Stock.tsx";
+import { StockWorkspace } from "./StockWorkspace";
+import {initialWorkspaceRoute} from './workflow-model';
 import { Operations } from "./Operations.tsx";
 import { Access, Master, Controls } from "./management.tsx";
 
@@ -104,6 +106,9 @@ function Application({ locale, setLocale }) {
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState({});
+  const workflowDirty = useRef(false);
+  const [workspaceContext, setWorkspaceContext] = useState<any>(null);
+  const setWorkflowDirty = useCallback((value: boolean) => { workflowDirty.current = value; }, []);
   const [loading, setLoading] = useState(false);
   const [catalogueQuery, replaceCatalogueQuery] = useState<any>({ view: "stock", page: 1, pageSize: 10 });
   const catalogueRef = useRef(catalogueQuery);
@@ -111,8 +116,11 @@ function Application({ locale, setLocale }) {
   const setCatalogueQuery = useCallback((value) => replaceCatalogueQuery((previous) => JSON.stringify(previous) === JSON.stringify(value) ? previous : value), []);
   const catalogueLoading = data.catalogue?.requestKey !== JSON.stringify(catalogueQuery);
   const refreshSequence = useRef(0);
+  const refreshController = useRef<AbortController | null>(null);
   const go = (next, orderId?) => {
-    if (orderId) setDrafts((all) => ({ ...all, [`${userRef.current?.id}|${warehouseRef.current}|${next}`]: { ...all[`${userRef.current?.id}|${warehouseRef.current}|${next}`], order: orderId } }));
+    if (workflowDirty.current && !window.confirm(t("Discard unsaved workflow changes? Save the draft first to keep them.", "Buang perubahan alur yang belum disimpan? Simpan draf dahulu untuk mempertahankannya."))) return;
+    workflowDirty.current = false;
+    if (orderId) setDrafts((all) => ({ ...all, [`${userRef.current?.id}|${warehouseRef.current}|${next}`]: { ...all[`${userRef.current?.id}|${warehouseRef.current}|${next}`], ...(typeof orderId === 'object' ? orderId : {order:orderId}) } }));
     location.hash = next;
     setRoute(next);
     setCatalogueQuery({ view: next, page: 1, pageSize: preferences.pageSize });
@@ -122,8 +130,10 @@ function Application({ locale, setLocale }) {
   const refresh = async (target = warehouse, owner = userRef.current?.id) => {
     if (!owner) return;
     const sequence = ++refreshSequence.current;
+    refreshController.current?.abort();
+    const controller = new AbortController(); refreshController.current = controller;
     try {
-      const snapshot = await api.snapshot(target, catalogueRef.current);
+      const snapshot = await api.snapshot(target, catalogueRef.current, controller.signal);
       if (userRef.current?.id === owner && warehouseRef.current === target && sequence === refreshSequence.current) {
         const pending = await api.pending();
         if (sequence !== refreshSequence.current) return;
@@ -141,6 +151,7 @@ function Application({ locale, setLocale }) {
         }
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       const pending = await api.pending().catch(() => null);
       if (pending && userRef.current?.id === owner && warehouseRef.current === target && sequence === refreshSequence.current) {
         const next = { ...dataRef.current, pending };
@@ -213,7 +224,7 @@ function Application({ locale, setLocale }) {
           const target = session.user.warehouses.includes(prefs.defaultWarehouse) ? prefs.defaultWarehouse : session.user.warehouses.includes(session.organizationWarehouse) ? session.organizationWarehouse : session.user.warehouses[0];
           setWarehouse(target);
           if (target) await refresh(target, session.user.id);
-          go(session.mode === "oidc" && session.organizationConfigured === false && session.user.role === "admin" ? "settings" : prefs.startPage);
+          go(initialWorkspaceRoute(location.hash,prefs.startPage,[...screens.map(screen=>screen[0]),'workspace','settings'],session.mode === "oidc" && session.organizationConfigured === false && session.user.role === "admin"));
         } else if (session.user)
           setNotice({
             kind: session.user.status === "pending" ? "warning" : "error",
@@ -260,13 +271,15 @@ function Application({ locale, setLocale }) {
   useEffect(() => {
     const handle = () => {
       const next = location.hash.slice(1);
+      if (next !== route && workflowDirty.current && !window.confirm(t("Discard unsaved workflow changes?", "Buang perubahan alur yang belum disimpan?"))) { history.replaceState(null, "", `#${route}`); return; }
+      if (next !== route) { workflowDirty.current = false; setNotice(null); }
       setRoute(user || authRoutes.includes(next) ? next : "signin");
       if (catalogueRef.current.view !== next) setCatalogueQuery({ view: next, page: 1, pageSize: preferences.pageSize });
       setMenu(false);
     };
     window.addEventListener("hashchange", handle);
     return () => window.removeEventListener("hashchange", handle);
-  }, [user, preferences.pageSize]);
+  }, [user, preferences.pageSize, route]);
   useEffect(() => {
     document.documentElement.lang = locale === "en" ? "en" : "id";
   }, [locale]);
@@ -467,6 +480,19 @@ function Application({ locale, setLocale }) {
     catalogueLoading,
     data,
     setData,
+    persistData: setData,
+    workspaceContext,
+    consumeWorkspaceContext: () => setWorkspaceContext(null),
+    setWorkflowDirty,
+    openWorkflow: data.workflowEnabled === false ? undefined : (context: any) => { go("stock"); setWorkspaceContext(context); },
+    dispatchWorkflow: async (type: string, payload: any, expectedVersion: number | null) => {
+      if (userRef.current?.id !== user.id || warehouseRef.current !== warehouse) throw new api.ApiError("scope", 403);
+      const source = payload.document || payload.order || payload.task;
+      const original = (await api.pending()).some(row => row.request.user === user.id && row.request.warehouse === warehouse && row.request.type === type && source && (row.request.payload.document || row.request.payload.order || row.request.payload.task) === source);
+      if (original) throw new api.ApiError("original-request-pending", 409);
+      const body: api.BusinessCommand = { type, warehouse, principalId: user.id, expectedVersion, payload, occurredAt: new Date().toISOString() };
+      return await api.send(crypto.randomUUID(), body, user.id, mode).finally(() => publishPending().catch(() => {}));
+    },
     user,
     warehouse,
     go,
@@ -663,7 +689,7 @@ function Application({ locale, setLocale }) {
               <button
                 className="icon-button"
                 aria-label={t("Sign out", "Keluar")}
-                onClick={() => setReview({ logout: true })}
+                onClick={() => { if (workflowDirty.current && !window.confirm(t("Sign out and discard unsaved changes?", "Keluar dan buang perubahan yang belum disimpan?"))) return; workflowDirty.current = false; setReview({ logout: true }); }}
               >
                 <SignOut size={20} />
               </button>
@@ -757,7 +783,9 @@ function Application({ locale, setLocale }) {
                     )}
                   </Notice>
                 ) : route === "stock" ? (
-                  <Stock {...ctx} />
+                  data.workflowEnabled === false ? <Stock {...ctx} /> : <StockWorkspace {...ctx} route="stock" key={`${user.id}|${warehouse}`} />
+                ) : data.workflowEnabled !== false && ["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) ? (
+                  <StockWorkspace {...ctx} route={route} key={`${user.id}|${warehouse}|${route}`} />
                 ) : route === "access" ? (
                   <Access {...ctx} />
                 ) : route === "master" ? (
@@ -785,9 +813,9 @@ function Application({ locale, setLocale }) {
             <footer className="workspace-footer">
               <span>
                 {authMode === "development-demo" ? t(
-                  "Development database · Drafts stay in this tab",
-                  "Database pengembangan · Draf tetap di tab ini",
-                ) : t("Drafts stay in this tab", "Draf tetap di tab ini")}
+                  "Development database · Use Save draft in the stock workflow to restore it later",
+                  "Database pengembangan · Gunakan Simpan draf pada alur stok untuk membukanya kembali",
+                ) : t("Save stock workflow drafts to reopen them later", "Simpan draf alur stok agar dapat dibuka kembali")}
               </span>
               {data.asOf && snapshotScope === `${user.id}|${warehouse}` && (
                 <span>

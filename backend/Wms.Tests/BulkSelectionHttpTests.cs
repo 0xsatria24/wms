@@ -59,15 +59,17 @@ public sealed partial class HttpApiTests
     {
         await using var factory = await Factory();
         using var admin = await Login(factory, "admin");
+        using (var scope = factory.Services.CreateScope()) { var db = scope.ServiceProvider.GetRequiredService<WmsDb>(); db.Items.Add(new Item { Id = "demo|BULK-EMPTY", Sku = "BULK-EMPTY", Name = "Empty material", Barcode = "000BULKEMPTY", Unit = "kg" }); await db.SaveChangesAsync(); }
         Assert.Equal(HttpStatusCode.NotFound, (await Edit(admin, "master-status", new { sku = "MISSING-BULK", version = 5, active = true, reason = "Must not recreate" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await Edit(admin, "master-status", new { sku = "SKU-A", version = 0, active = false, reason = "Disable item" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await Edit(admin, "master-status", new { sku = "SKU-A", version = 0, active = true, reason = "Stale version" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Edit(admin, "master-status", new { sku = "BULK-EMPTY", version = 0, active = false, reason = "Disable item" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Edit(admin, "master-status", new { sku = "BULK-EMPTY", version = 0, active = true, reason = "Stale version" })).StatusCode);
         using var verify = factory.Services.CreateScope();
         var final = verify.ServiceProvider.GetRequiredService<WmsDb>();
         Assert.False(await final.Items.AnyAsync(i => i.Sku == "MISSING-BULK"));
-        var item = await final.Items.SingleAsync(i => i.Sku == "SKU-A");
+        var item = await final.Items.SingleAsync(i => i.Sku == "BULK-EMPTY");
         Assert.False(item.Active);
         Assert.Equal(1, item.Version);
+        Assert.Equal("Empty material",item.Name);Assert.Equal("000BULKEMPTY",item.Barcode);Assert.Equal("kg",item.Unit);
     }
 
     [Fact]

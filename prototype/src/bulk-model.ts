@@ -41,10 +41,11 @@ export function canAccessAction(status: string, row: any, user: any) {
   if (
     user.role !== "admin" ||
     row.id === user.id ||
-    !(row.warehouses || []).every((w: string) => user.warehouses?.includes(w))
+    !(row.warehouses || []).every((w: string) => (user.adminWarehouses || user.warehouses || []).includes(w))
   )
     return false;
   if (status === "active") return row.status === "pending" && row.verified;
+  if (status === "edit") return row.status === "active" && row.verified;
   if (status === "rejected") return row.status === "pending";
   return (
     status === "revoked" &&

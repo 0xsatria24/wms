@@ -318,8 +318,8 @@ export function WorkQueue({
       <p className="queue-context">
         {(from || to) && <span>{t("Documents without a document date are excluded from this period. ", "Dokumen tanpa tanggal dokumen tidak termasuk dalam periode ini. ")}</span>}
         {t(
-          "Quantities in units. Open a row to view its details below.",
-          "Jumlah dalam unit. Buka baris untuk melihat detail di bawah.",
+          "Quantities use each item's base unit. Open a row to continue its process.",
+          "Jumlah memakai satuan dasar barang. Buka baris untuk melanjutkan prosesnya.",
         )}
         <span className="queue-scroll-hint">
           {t(
@@ -341,7 +341,7 @@ export function WorkQueue({
           selection={bulkActions ? bulk : undefined}
           showSelectionMark={false}
           rows={result.rows}
-          columns={columns.map(column => ({ ...column, width: columnWidths[column.key], className: `queue-column-${column.key}` }))}
+          columns={columns.map(column => ({ ...column, ...(column.numeric?{render:row=><span>{row[column.key]} {productMap.get(row.sku)?.unit||''}</span>}:{}), width: columnWidths[column.key], className: `queue-column-${column.key}` }))}
           selected={selected}
           onSelect={(row) => open(row.id)}
           empty={
