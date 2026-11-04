@@ -54,10 +54,11 @@ try {
         $code = & curl.exe --noproxy '*' --insecure --silent --max-time 5 --output $bodyFile --write-out '%{http_code}' "https://localhost:$port$path"
         if ($LASTEXITCODE -ne 0 -or $code -ne '404') { throw "Unexpected route response for $path : $code" }
     }
-    $code = & curl.exe --noproxy '*' --insecure --silent --max-time 5 --output $bodyFile --write-out '%{http_code}' "https://localhost:$port/api/session"
-    if ($LASTEXITCODE -ne 0 -or $code -ne '200' -or (Get-Content $bodyFile -Raw | ConvertFrom-Json).mode -ne 'oidc') { throw 'Published package did not run with production OIDC.' }
+    # Session branding now reads the organization database. This fixture deliberately has no database.
+    $code = & curl.exe --noproxy '*' --insecure --silent --max-time 8 --output $bodyFile --write-out '%{http_code}' "https://localhost:$port/health/setup-ready"
+    if ($LASTEXITCODE -ne 0 -or $code -ne '503') { throw 'Published package did not fail readiness with its unavailable fixture database.' }
     if (-not (Test-Path -LiteralPath $heartbeat) -or (Get-Content $heartbeat -Raw | ConvertFrom-Json).status -ne 'disabled') { throw 'Published worker did not write its heartbeat.' }
-    Write-Host "PASS: self-contained API HTTPS/SPA/reserved routes/OIDC mode and worker heartbeat. Fixture only; no service install, trust-store change, database or SSO login. Logs: $testRoot"
+    Write-Host "PASS: self-contained API HTTPS/SPA/reserved routes, disabled demo login, fail-closed database readiness and worker heartbeat. Fixture only; no service install, trust-store change, database or SSO login. Logs: $testRoot"
 } finally {
     foreach ($process in @($worker,$api)) { if ($process -and -not $process.HasExited) { Stop-Process -InputObject $process -ErrorAction SilentlyContinue } }
     $rsa.Dispose()

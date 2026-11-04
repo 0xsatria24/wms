@@ -1,5 +1,7 @@
 # Prototype Instructions
 
+- Workflow direction, 4 November 2026: the user allows manual goods receipt without an ERP PO and selected a side panel from Stock position so the table and action form remain visible together. Unknown items must be creatable or proposed within the receipt flow without losing its draft. Replace inefficient functions based on the comprehensive audit and retain effective ones. The current request is audit/design/PRD, not product implementation. See `../docs/planning/2026-11-04-stock-workspace-prd.md` and `../docs/superpowers/specs/2026-11-04-stock-workspace-design.md`; their drafts still require review before implementation.
+
 - Organization setup, 3 November 2026: user approved a company/warehouse/storage-location form after first administrator login. Keep it in Settings → Company & warehouses, outside the activation/identity/review wizard. Persist company branding in the application. Create new warehouses and initial locations transactionally; preserve names/identities of existing operational warehouses.
 
 - Account flow, 3 November 2026: user approved WMS-managed invitations with Keycloak owning passwords. In OIDC mode, Add user captures name/email/role/warehouses once; verified sign-in activates only the stored, still-authorized invitation. Keep explicit status/check/resend, generic password-recovery responses, and EN/ID copy. Preserve the existing demo path. The low-risk public-enrollment quota finding is explicitly deferred; do not bundle its remediation into this work.
@@ -24,7 +26,7 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 - English is the default. Indonesian uses “Dipesan” for Reserved for orders. Product codes, document numbers and warehouse master names stay unchanged.
 - This full stack needs API, worker and PostgreSQL hosting. A static frontend-only Sites deployment would not host the backend.
 - Admin access management must include Add user and Delete user actions. New users follow pending verification/approval; deletion revokes access while preserving transaction/audit identity. The language option must read "Bahasa Indonesia", without "(santai)".
-- Stock columns must align headers and values according to the approved table refinement below. Sidebar scrollbars must not be visible, with keyboard/touch access preserved and one navigation group expanded at a time. Items use a searchable/filterable/paginated catalogue with separate detail editing, rather than an unbounded card list. Preserve draft edits when background snapshots refresh.
+- Stock columns must align headers and values according to the approved table refinement below. Sidebar correction, 4 November 2026: navigation categories expand independently so all groups can remain open simultaneously; opening one must not close another. Show a sidebar navigation scrollbar when expanded menus exceed the available height, preserving keyboard/touch access. This supersedes the earlier hidden-scrollbar requirement. Items use a searchable/filterable/paginated catalogue with separate detail editing, rather than an unbounded card list. Preserve draft edits when background snapshots refresh.
 
 ## Document lists, 1 November 2026
 

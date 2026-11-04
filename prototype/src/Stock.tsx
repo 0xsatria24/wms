@@ -19,8 +19,7 @@ import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { stockItemPage } from "./stock-items";
 import { useServerCatalogue } from "./server-catalogue";
 import { SelectionCell, SelectionHeader, useBulkSelection } from "./selection";
-import { BulkActions } from "./BulkActions";
-import { downloadCsv } from "./bulk-files";
+import { ExportPanel } from "./ExportPanel";
 import {
   Button,
   Field,
@@ -344,7 +343,10 @@ export function Stock({
               </select>
             </Field>
           </div>
-          <BulkActions selection={bulk} actions={[{ id: "export", label: t("Export selected stock", "Ekspor stok terpilih"), description: t("Exports only the matching positions of the selected SKUs, with locations, restrictions and units kept separate.", "Mengekspor hanya posisi yang sesuai filter dari SKU terpilih, dengan lokasi, pembatasan, dan satuan tetap terpisah."), perform: async () => {}, complete: rows => downloadCsv("selected-stock.csv", [["Warehouse", "SKU", "Item", "Location", "Condition", "Hold", "Frozen", "Pickable", "On hand", "Reserved", "Available", "Unit", "Last movement"], ...rows.flatMap(group => group.rows.map(position => [warehouse, group.sku, group.product.name, position.location, position.condition, position.hold || "", !!position.frozen, position.pickable ?? /^A-/.test(position.location), position.qty, position.reserved, available(position), position.unit || group.product.unit || "units", position.lastMovementAt || ""]))]) }]} />
+          <ExportPanel warehouse={warehouse} user={user} context={bulk.token} disabled={!!setCatalogueQuery && !server} request={{ query: search, location: loc, condition, status: stockStatus, sort, descending }} options={[
+            { type: "stock", label: t("All matching stock", "Semua stok sesuai filter"), request: { scope: "all" } },
+            ...(bulk.selectedRows.length ? [{ type: "stock", label: t("Selected stock", "Stok terpilih"), request: { scope: "selected", ids: bulk.selectedRows.map(row => row.sku) }, estimate: bulk.selectedRows.reduce((sum, row) => sum + row.rows.length, 0) }] : []),
+          ]} />
           <div
             className="stock-group-scroll"
             role="region"

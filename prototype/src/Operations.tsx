@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Reference } from "./Reference";
+import { ExportPanel, type ExportOption } from "./ExportPanel";
 import { DocumentDates, TableTimestamp, useDateTime } from "./DateTime";
 import { Barcode, ArrowRight, Plus } from "@phosphor-icons/react";
 import { MAIN, SECONDARY, available } from "./fixtures";
@@ -1253,7 +1254,7 @@ export function Operations(props) {
           }
         />
         <div className="work-queue-table operational-date-table" role="region" tabIndex={0} aria-label={t("Transfer documents", "Dokumen transfer")}><DataTable label={t("Transfer documents", "Dokumen transfer")} rows={docs} selected={doc?.id}
-          onSelect={mode === "receive" ? row => patch({ document: row.id, qty: undefined, scan: "", locationScan: "" }) : undefined}
+          onSelect={row => patch({ document: row.id, qty: undefined, scan: "", locationScan: "" })}
           columns={[
             { key: "id", label: t("Document", "Dokumen") },
             { key: "from", label: t("From", "Dari") }, { key: "to", label: t("To", "Ke") },
@@ -1455,6 +1456,8 @@ export function Operations(props) {
           label={t("Return history", "Riwayat retur")}
           empty={t("No returns recorded yet.", "Belum ada retur tercatat.")}
           rows={scoped(data.returns)}
+          selected={d.exportReturnId}
+          onSelect={row => applyDraft({ ...d, exportReturnId: row.id })}
           columns={[
             { key: "id", label: t("Transaction", "Transaksi") },
             { key: "source", label: t("Source", "Sumber") },
@@ -1679,6 +1682,21 @@ export function Operations(props) {
       </Panel>
     );
   }
+  const exportDocument = [...data.receipts, ...data.orders, ...data.counts, ...data.transfers, ...data.returns].find(row => row.id === (route === "returns" ? d.exportReturnId : activeDocumentId));
+  const exportOptions: ExportOption[] = [];
+  if (exportDocument) {
+    if (route === "receiving") exportOptions.push({ type: "receive", events: "receive", label: t("Receipt transaction", "Transaksi penerimaan") }, { type: "receive-summary", label: t("Receipt summary", "Rekap penerimaan") });
+    if (route === "shipping") exportOptions.push({ type: "packing", label: t("Packing plan (not shipment evidence)", "Rencana packing (bukan bukti pengiriman)") }, { type: "ship", events: "ship", label: t("Shipment transaction", "Transaksi pengiriman") });
+    if (route === "transfers") exportOptions.push({ type: "transfer-send", events: "transfer-send", label: t("Transfer dispatch", "Pengiriman transfer") }, { type: "transfer-receive", events: "transfer-receive", label: t("Transfer receipt", "Penerimaan transfer") }, { type: "transfer-summary", label: t("Transfer summary", "Rekap transfer") });
+    if (route === "returns") exportOptions.push({ type: exportDocument.type, label: t("Posted return evidence", "Bukti retur tercatat") });
+    if (route === "count") {
+      const reviewer = user.role === "admin" || user.role === "supervisor" && data.approvalPolicy?.countReview !== "admin";
+      if (exportDocument.status === "counting" && user.role !== "viewer") exportOptions.push({ type: "count-sheet", label: t("Blind count sheet", "Lembar hitung tanpa saldo") });
+      if (reviewer && ["review", "adjusted", "closed"].includes(exportDocument.status)) exportOptions.push({ type: "count-review", label: t("Review this count", "Tinjau opname ini"), request: { scope: "selected", ids: [exportDocument.id] } });
+      if (reviewer && ["adjusted", "closed"].includes(exportDocument.status)) exportOptions.push({ type: "count-report", label: t("Approved count report", "Berita acara opname disetujui") });
+    }
+  }
+  if (route === "count" && (user.role === "admin" || user.role === "supervisor" && data.approvalPolicy?.countReview !== "admin")) exportOptions.push({ type: "count-review", label: t("All matching count reviews", "Semua tinjauan opname sesuai filter"), request: { documentId: undefined, version: undefined, scope: "all", sku: d.sku || "" } });
   return (
     <div className="stack">
       {d[documentField] && !activeDocumentId && !props.catalogueLoading && <Notice kind="warning">
@@ -1686,6 +1704,7 @@ export function Operations(props) {
         <Button onClick={() => applyDraft({ [documentField]: undefined, qty: undefined, good: undefined, bad: undefined, scan: "", locationScan: "", reason: "" })}>{t("Clear unavailable document draft", "Hapus draf dokumen yang tidak tersedia")}</Button>
       </Notice>}
       {content}
+      <ExportPanel warehouse={warehouse} user={user} context={JSON.stringify([route, d, props.catalogueQuery])} request={{ documentId: exportDocument?.id, version: exportDocument?.version }} options={exportOptions} />
       {!["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) && <DocumentDates row={[...data.counts, ...data.transfers, ...data.returns, ...data.orders, ...data.returnTasks].find(row => row.id === activeDocumentId)} warehouse={warehouse} user={user} onSaved={props.refresh} />}
       {!["orders", "count", "returns", "transfers", "cancellation"].includes(
         route,

@@ -35,7 +35,7 @@ if (args.Contains("--healthcheck", StringComparer.Ordinal))
 var builder = WebApplication.CreateBuilder(args);
 if (builder.Configuration["deployment-config"] is { } deploymentConfig)
     builder.Configuration.AddJsonFile(Path.GetFullPath(deploymentConfig), optional: false, reloadOnChange: false);
-builder.Services.AddWindowsService(options => options.ServiceName = "InventoryWms.Api");
+builder.Services.AddWindowsService(options => options.ServiceName = builder.Configuration["WindowsService:Name"] ?? "InventoryWms.Api");
 var directHttps = builder.Configuration.GetValue<bool>("Hosting:DirectHttps");
 var demo = builder.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Development:EnableDemoAuth");
 var gatewayEnabled = builder.Configuration.GetValue<bool>("Gateway:Enabled");
@@ -50,6 +50,7 @@ builder.Services.AddScoped<CommandProcessor>();
 builder.Services.AddScoped<SnapshotQuery>();
 builder.Services.AddScoped<EditService>();
 builder.Services.AddScoped<LedgerExport>();
+builder.Services.AddScoped<OperationalExport>();
 builder.Services.AddScoped<PurchaseOrderImport>();
 builder.Services.AddAntiforgery(o => { o.HeaderName = "X-XSRF-TOKEN"; o.Cookie.Name = "Wms.Csrf"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Strict; o.Cookie.SecurePolicy = demo ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always; });
 builder.Services.AddSignalR();
@@ -237,6 +238,7 @@ app.MapGet("/api/items/{sku}/image", async (string sku, string warehouse, HttpCo
     return Results.File(Convert.FromBase64String(image[(comma + 1)..]), mime);
 }).RequireAuthorization();
 app.MapGet("/api/workspaces/{warehouse}/ledger.csv", async (string warehouse, string sku, string? location, string? query, string? from, string? to, HttpContext context, AccessService access, LedgerExport export, CancellationToken ct) => { var actor = await access.Resolve(context.User, warehouse, ct); return Results.File(await export.Csv(actor, sku, location, query, ct, from, to), "text/csv; charset=utf-8", "stock-movements.csv"); }).RequireAuthorization();
+app.MapOperationalExports();
 app.MapPost("/api/commands", async (CommandRequest request, HttpContext context, AccessService access, CommandProcessor commands, IHubContext<WorkspaceHub> hub, WmsDb db, CancellationToken ct) =>
 {
     var actor = await access.Resolve(context.User, request.Warehouse, ct);

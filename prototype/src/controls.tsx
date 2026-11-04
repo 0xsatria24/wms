@@ -20,7 +20,7 @@ import {
   errorText,
 } from "./ui.tsx";
 import { MAIN } from "./fixtures";
-import { exportLedger } from "./api";
+import { ExportPanel } from "./ExportPanel";
 import { productSuggestions, valueSuggestions } from "./autocomplete-model";
 import { useServerCatalogue } from "./server-catalogue";
 import { useBulkSelection } from "./selection";
@@ -395,22 +395,7 @@ export function Controls({
           <span>{t(`Page ${data.ledgerPage.page} of ${data.ledgerPage.pages} · ${data.ledgerPage.total} movements`, `Halaman ${data.ledgerPage.page} dari ${data.ledgerPage.pages} · ${data.ledgerPage.total} mutasi`)}</span>
           <Button disabled={data.ledgerPage.page >= data.ledgerPage.pages} onClick={() => setLedgerPage(data.ledgerPage.page + 1)}>{t("Next page", "Halaman berikutnya")}</Button>
         </div>}
-        <div className="section-actions">
-          <Button
-            onClick={() =>
-              void exportLedger(
-                warehouse,
-                sku,
-                loc,
-                query,
-                fromDate,
-                toDate,
-              ).catch((error) => flash(errorText(error.message, t), "error"))
-            }
-          >
-            {t("Export this scope", "Ekspor lingkup ini")}
-          </Button>
-        </div>
+        <ExportPanel warehouse={warehouse} user={user} request={{ sku, location: loc, query, from: fromDate, to: toDate, scope: "all" }} options={[{ type: "ledger", label: t("All matching movements", "Semua mutasi sesuai filter"), estimate: data.ledgerPage?.total }]} />
         <Notice>
           {t(
             "Posted history is read only. Corrections use an authorized count or opening document with a source reference.",

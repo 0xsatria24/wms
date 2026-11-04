@@ -62,6 +62,35 @@ export const saveOrganization = (input: unknown) => request<any>("/api/organizat
 export const saveWarehouseSettings = (warehouse: string, section: string, value: unknown) => request<any>(`/api/workspaces/${encodeURIComponent(warehouse)}/settings/${section}`, value);
 export const addStorageLocation = (warehouse: string, name: string) => request("/api/edit", { type: "locationMaster", warehouse, payload: { name, pickable: true } });
 let csrf = "";
+export interface ExportRequest {
+  type: string; format?: string; scope?: string; ids?: string[]; documentId?: string;
+  version?: number; transactionId?: string; sku?: string; location?: string;
+  condition?: string; status?: string; query?: string; from?: string; to?: string;
+  sort?: string; descending?: boolean; locale?: string;
+}
+export async function exportEvents(warehouse: string, documentId: string, signal: AbortSignal) {
+  const response = await fetch(`/api/workspaces/${encodeURIComponent(warehouse)}/export-events?documentId=${encodeURIComponent(documentId)}`, { credentials: "same-origin", cache: "no-store", signal });
+  if (!response.ok) throw new ApiError((await response.json().catch(() => ({}))).code || "server-error", response.status);
+  return await response.json() as { id: string; kind: string; posted: string; quantity: string }[];
+}
+export async function operationalExport(warehouse: string, input: ExportRequest, signal: AbortSignal, canDeliver = () => true) {
+  if (!csrf) await session();
+  signal.throwIfAborted();
+  const response = await fetch(`/api/workspaces/${encodeURIComponent(warehouse)}/exports`, {
+    method: "POST", credentials: "same-origin", cache: "no-store", signal,
+    headers: { "Content-Type": "application/json", "X-XSRF-TOKEN": csrf }, body: JSON.stringify(input),
+  });
+  if (!response.ok) throw new ApiError((await response.json().catch(() => ({}))).code || "server-error", response.status);
+  const blob = await response.blob();
+  signal.throwIfAborted();
+  if (!canDeliver()) throw new DOMException("Export context changed", "AbortError");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = /filename\*?=(?:UTF-8''|\")?([^\";]+)/i.exec(response.headers.get("Content-Disposition") || "")?.[1] || `wms-export.${input.format || "pdf"}`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 export const setupStatus = () => request<{state: string; companyName: string}>("/api/setup/status");
 export async function setupSession() {
   const value = await request<any>("/api/setup/session"); csrf = value.csrfToken; return value;
