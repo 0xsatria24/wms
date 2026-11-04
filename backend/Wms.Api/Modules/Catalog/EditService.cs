@@ -46,12 +46,14 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
         else if (request.Type == "master-status")
         {
             Supervisor(actor);
-            var item = await db.Items.SingleOrDefaultAsync(i => i.CompanyId == "demo" && i.Sku == p.Text("sku"), ct);
+            var statusSku = p.Text("sku");
+            var item = (await db.Items.FromSqlInterpolated($"SELECT * FROM \"Items\" WHERE \"CompanyId\" = 'demo' AND \"Sku\" = {statusSku} FOR UPDATE").ToListAsync(ct)).SingleOrDefault();
             Require(item is not null, "source", 404);
             Require(p.TryGetProperty("version", out var version) && version.TryGetInt64(out var expected) && expected == item!.Version, "conflict");
             Require(p.TryGetProperty("active", out var activeValue) && activeValue.ValueKind is JsonValueKind.True or JsonValueKind.False, "required", 400);
             var active = activeValue.GetBoolean();
             Require(p.Text("reason").Length <= 2000 && (active || !string.IsNullOrWhiteSpace(p.Text("reason"))), "reason", 400);
+            if (!active) await RequireNoOpenWork(item!, ct);
             item!.Active = active;
             item.Version++;
         }
@@ -63,7 +65,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             Require(!string.IsNullOrWhiteSpace(sku) && !string.IsNullOrWhiteSpace(p.Text("name")) && !string.IsNullOrWhiteSpace(p.Text("barcode")) && !string.IsNullOrWhiteSpace(p.Text("unit")), "required", 400);
             Require(System.Text.RegularExpressions.Regex.IsMatch(p.Text("barcode"), "^[\\x20-\\x7E]+$"), "barcode-format", 400);
             var factor = p.Quantity("factor");
-            var existing = await db.Items.SingleOrDefaultAsync(i => i.CompanyId == "demo" && i.Sku == sku, ct);
+            var existing = (await db.Items.FromSqlInterpolated($"SELECT * FROM \"Items\" WHERE \"CompanyId\" = 'demo' AND \"Sku\" = {sku} FOR UPDATE").ToListAsync(ct)).SingleOrDefault();
             Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Sku != sku && i.Barcode == p.Text("barcode"), ct), "duplicate", 409);
             if (existing is null)
             {
@@ -82,6 +84,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             }
             var active = p.TryGetProperty("active", out var activeValue) && activeValue.GetBoolean();
             Require(active || !string.IsNullOrWhiteSpace(p.Text("reason")), "reason", 400);
+            if (!active) await RequireNoOpenWork(existing, ct);
             var image = p.TryGetProperty("image", out var imageValue) && imageValue.ValueKind == JsonValueKind.String ? imageValue.GetString() : null;
             if (existing.Image is not null && image == $"/api/items/{Uri.EscapeDataString(sku)}/image?warehouse={Uri.EscapeDataString(actor.WarehouseId)}")
                 image = existing.Image;
@@ -238,6 +241,16 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             Require(id.Length is > 0 and < 100 && !await db.Documents.AnyAsync(d => d.Id == id, ct), "duplicate");
             db.Documents.Add(new OperationalDocument { Id = id, Kind = "order", ItemId = item!.Id, WarehouseId = actor.WarehouseId, Quantity = p.Quantity(), Creator = actor.Id, Status = "draft", DocumentDate = WarehouseDates.Date(p.Text("documentDate")), ScheduledDate = WarehouseDates.Date(p.Text("scheduledDate")) });
         }
+        else if (request.Type == "revise-order")
+        {
+            var doc = await db.Documents.SingleOrDefaultAsync(d => d.Id == p.Text("id") && d.WarehouseId == actor.WarehouseId && d.Kind == "order", ct);
+            Require(doc is not null && (doc.Status is "draft" or "rejected") && (doc.Creator == actor.Id || actor.Role is "admin" or "supervisor"), "denied", 403);
+            Require(p.TryGetProperty("version", out var revisionVersion) && revisionVersion.TryGetInt64(out var expectedRevision) && doc.Version == expectedRevision, "conflict");
+            Require(p.Text("reason").Length is > 0 and <= 2000, "reason", 400);
+            doc.Quantity = p.Quantity();
+            doc.Status = "draft";
+            doc.Version++;
+        }
         else if (request.Type == "submit-order")
         {
             var doc = await db.Documents.SingleOrDefaultAsync(d => d.Id == p.Text("id") && d.WarehouseId == actor.WarehouseId && d.Kind == "order", ct);
@@ -327,6 +340,15 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             await SupportingPayload.RequireStoredBound(db, entry.Entity.PayloadJson, ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+    }
+
+    private async Task RequireNoOpenWork(Item item, CancellationToken ct)
+    {
+        Require(!await db.Positions.AnyAsync(position => position.ItemId == item.Id && position.OnHand > 0, ct)
+            && !await db.Documents.AnyAsync(document => document.ItemId == item.Id &&
+                (document.Kind == "count" && document.Status != "closed"
+                || document.Kind == "order" && document.Status != "cancelled" && document.Quantity > document.Shipped
+                || document.Kind != "order" && document.Kind != "count" && document.Quantity > document.Actual), ct), "item-open-work");
     }
 
     private static bool ReferencesSku(JsonElement value, string sku) => value.ValueKind switch

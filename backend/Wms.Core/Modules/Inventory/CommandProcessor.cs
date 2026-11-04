@@ -177,6 +177,11 @@ public sealed partial class CommandProcessor(WmsDb db)
         var p = command.Payload;
         switch (command.Type)
         {
+            case "manual-receive":
+            case "relocate":
+            case "reserve-plan":
+                await WorkspaceCommand(ct);
+                break;
             case "receive":
                 {
                     var doc = Doc(p.Text("document"), "po");
