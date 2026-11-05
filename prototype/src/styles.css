@@ -1354,7 +1354,7 @@ dialog.catalogue-editor {
     width: 18%;
   }
   .catalogue-table:has(.item-actions) th:last-child {
-    width: 18%;
+    width: 224px;
   }
   .catalogue-table th:nth-child(n + 4),
   .catalogue-table td:nth-child(n + 4) {
@@ -1365,15 +1365,16 @@ dialog.catalogue-editor {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: var(--table-control-gap);
+  gap: 4px;
   white-space: nowrap;
 }
 .data-table .item-actions .button {
   min-height: 32px;
-  padding: 5px 8px;
+  min-width: 0;
+  padding: 4px 6px;
   gap: 4px;
   border-radius: 6px;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
 }
 .item-actions .button svg {
   width: 16px;
