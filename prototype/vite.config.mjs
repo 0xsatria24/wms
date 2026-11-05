@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-const apiTarget = process.env.WMS_API_TARGET || "http://127.0.0.1:5080";
+import {devApiTarget} from './scripts/dev-api-target.mjs';
+const apiTarget = devApiTarget() || "http://127.0.0.1:5080";
 
 export default defineConfig({
   build: {
@@ -18,6 +19,8 @@ export default defineConfig({
     include: ["react", "react-dom/client"],
   },
   server: {
+    port: 5173,
+    strictPort: true,
     host: "0.0.0.0",
     allowedHosts: ["terminal.local"],
     proxy: {

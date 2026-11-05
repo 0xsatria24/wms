@@ -2159,6 +2159,30 @@ h3 {
 .stock-workspace { min-width: 0; display: grid; gap: 20px; align-items: start; }
 .stock-workspace.has-workflow-panel { grid-template-columns: minmax(0, 1fr) minmax(370px, 430px); }
 .workflow-main { min-width: 0; }
+.workflow-actions, .workflow-tabs, .operation-export-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.workflow-actions { margin-bottom: 16px; }
+.workflow-tabs { margin-left: auto; }
+.workflow-tabs .button[aria-pressed="true"] { background: var(--selected); color: var(--primary); }
+.export-guidance { color: var(--muted); margin: 0 0 12px; }
+.operation-export-toolbar { justify-content: space-between; }
+.operation-export-toolbar .export-guidance { margin: 0; flex: 1 1 280px; }
+.operation-export-toolbar .section-actions,
+.workflow-body > .section-actions,
+.stock-toolbar > .section-actions { margin: 0; justify-content: flex-start; }
+.workflow-body > .section-actions { margin-bottom: 16px; }
+.workflow-main .stock-toolbar {
+  max-width: none;
+  margin: 0 0 16px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.workflow-main .stock-toolbar .search { flex: 1 1 260px; min-width: 0; }
+.workflow-main .stock-toolbar .field > label { position: static; width: auto; height: auto; clip-path: none; }
 .workflow-main .button[hidden] { display: none; }
 .workflow-panel { position: sticky; top: 16px; display: flex; flex-direction: column; max-height: calc(100dvh - var(--workflow-top, 180px) - 16px); min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
 .workflow-panel > header { display: flex; flex-shrink: 0; justify-content: space-between; align-items: start; gap: 12px; padding: 20px; border-bottom: 1px solid var(--divider); }

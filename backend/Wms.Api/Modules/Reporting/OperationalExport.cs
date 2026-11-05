@@ -74,7 +74,7 @@ public sealed class OperationalExport(WmsDb db)
                 var zone = (await OperationalSettings.Read(db, "warehouse", actor.WarehouseId, new WarehouseDetails(), ct)).Value.TimeZone;
                 var company = (await OperationalSettings.Read(db, "company", "demo", new OrganizationProfile(), ct)).Value.Name;
                 var principal = await db.Principals.AsNoTracking().SingleAsync(p => p.Id == actor.Id, ct);
-                meta = new() { ["ExportId"] = exportId, ["ReportType"] = r.Type, ["TemplateVersion"] = "1", ["Company"] = company,
+                meta = new() { ["ExportId"] = exportId, ["ReportType"] = r.Type, ["TemplateVersion"] = "2", ["Company"] = company,
                     ["WarehouseId"] = wh.Id, ["WarehouseName"] = wh.Name, ["SnapshotAtUTC"] = now.ToString("O"), ["GeneratedAtUTC"] = now.ToString("O"),
                     ["WarehouseTimeZone"] = zone, ["Locale"] = r.Locale, ["Scope"] = r.Scope, ["GeneratedBy"] = principal.Name, ["ActorId"] = actor.Id,
                     ["Query"] = r.Query ?? "", ["Location"] = r.Location ?? "", ["Condition"] = r.Condition ?? "", ["Status"] = r.Status ?? "",
@@ -103,7 +103,7 @@ public sealed class OperationalExport(WmsDb db)
             try
             {
                 db.ChangeTracker.Clear();
-                db.SupportingRecords.Add(new SupportingRecord { Id = exportId, WarehouseId = actor.WarehouseId, Kind = "export-audit", PayloadJson = JsonSerializer.Serialize(new { exportId, actor = actor.Id, type = r.Type, format = r.Format, scope = r.Scope, documentId = r.DocumentId, sourceVersion = r.Version, transactionId = r.TransactionId, filters = new { r.Sku, r.Location, r.Condition, r.Status, r.Query, r.From, r.To, r.Sort, r.Descending }, snapshotAtUTC = meta.GetValueOrDefault("SnapshotAtUTC"), at = DateTimeOffset.UtcNow, result, rowCount = result == "generated" ? rows.Count : (int?)null, templateVersion = "1" }) });
+                db.SupportingRecords.Add(new SupportingRecord { Id = exportId, WarehouseId = actor.WarehouseId, Kind = "export-audit", PayloadJson = JsonSerializer.Serialize(new { exportId, actor = actor.Id, type = r.Type, format = r.Format, scope = r.Scope, documentId = r.DocumentId, sourceVersion = r.Version, transactionId = r.TransactionId, filters = new { r.Sku, r.Location, r.Condition, r.Status, r.Query, r.From, r.To, r.Sort, r.Descending }, snapshotAtUTC = meta.GetValueOrDefault("SnapshotAtUTC"), at = DateTimeOffset.UtcNow, result, rowCount = result == "generated" ? rows.Count : (int?)null, templateVersion = "2" }) });
                 using var logTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5)); await db.SaveChangesAsync(logTimeout.Token);
             }
             finally { Active.TryRemove(actor.Id, out _); }
@@ -232,7 +232,7 @@ public sealed class OperationalExport(WmsDb db)
         if (type == "manual-receive")
         {
             // Same-SKU lines can share a physical ledger entry; export this line's immutable document actual.
-            title = T("Manual goods receipt line", "Baris bukti penerimaan manual");
+            title = T("Manual goods receipt", "Bukti penerimaan manual");
             meta["ReceiptHeader"] = d.Source;
             Table(["Receipt", "Line", "TransactionId", "SKU", "ItemName", "Quantity", "Unit", "Condition", "Hold", "PostedAt", "ActorId"], [new[] { d.Source, d.Id, txId!, item.Sku, item.Name, N(d.Actual), item.Unit, "unassessed", "awaiting-qc", D(entries[0].Movement.PostedAt), entries[0].Movement.Actor }]); return;
         }

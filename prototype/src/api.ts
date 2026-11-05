@@ -1,4 +1,5 @@
 import { HubConnectionBuilder, HubConnection } from "@microsoft/signalr";
+import {watchWorkspace} from './workspace-connection.ts';
 
 export interface SessionUser {
   id: string;
@@ -508,36 +509,9 @@ export async function persistEdit(
   throw new ApiError("unsupported-edit");
 }
 export function subscribe(warehouse: string, onChange: () => void): () => void {
-  let stopped = false;
-  let retryTimer: ReturnType<typeof setTimeout> | undefined;
-  let changeTimer: ReturnType<typeof setTimeout> | undefined;
   const connection: HubConnection = new HubConnectionBuilder()
     .withUrl("/hubs/workspace")
     .withAutomaticReconnect()
     .build();
-  connection.on("WorkspaceChanged", () => {
-    clearTimeout(changeTimer);
-    if (!stopped) changeTimer = setTimeout(onChange, 200);
-  });
-  connection.onreconnected(async () => {
-    if (stopped) return;
-    await connection.invoke("JoinWorkspace", warehouse);
-    if (!stopped) onChange();
-  });
-  const connect = () => {
-    connection.start()
-      .then(async () => {
-        if (stopped) return;
-        await connection.invoke("JoinWorkspace", warehouse);
-        if (!stopped) onChange();
-      })
-      .catch(() => { if (!stopped) retryTimer = setTimeout(connect, 5000); });
-  };
-  connect();
-  return () => {
-    stopped = true;
-    clearTimeout(retryTimer);
-    clearTimeout(changeTimer);
-    void connection.stop();
-  };
+  return watchWorkspace(connection,warehouse,onChange);
 }

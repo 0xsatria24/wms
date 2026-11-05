@@ -1704,8 +1704,12 @@ export function Operations(props) {
         {t("The saved document is unavailable in this view. Choose a document explicitly before entering a new scan or quantity.", "Dokumen draf tidak tersedia pada tampilan ini. Pilih dokumen secara eksplisit sebelum memasukkan scan atau jumlah baru.")}
         <Button onClick={() => applyDraft({ [documentField]: undefined, qty: undefined, good: undefined, bad: undefined, scan: "", locationScan: "", reason: "" })}>{t("Clear unavailable document draft", "Hapus draf dokumen yang tidak tersedia")}</Button>
       </Notice>}
-      {content}
+      {["count", "transfers", "returns", "shipping", "receiving"].includes(route) && <div className="operation-export-toolbar">
+        <p className="export-guidance">{route === "count" ? t("Select a count for its count sheet, review spreadsheet or approved report, according to your access and its stage.", "Pilih opname untuk lembar hitung, Excel hasil tinjauan, atau berita acara sesuai hak akses dan tahapnya.") : t("Select a document to export its PDF evidence or summary.", "Pilih dokumen untuk mengekspor PDF bukti transaksi atau rekapnya.")}</p>
       <ExportPanel warehouse={warehouse} user={user} context={JSON.stringify([route, d, props.catalogueQuery])} request={{ documentId: exportDocument?.id, version: exportDocument?.version }} options={exportOptions} />
+      </div>}
+      {content}
+
       {!["receiving", "quality", "putaway", "orders", "reservations", "picking", "shipping"].includes(route) && <DocumentDates row={[...data.counts, ...data.transfers, ...data.returns, ...data.orders, ...data.returnTasks].find(row => row.id === activeDocumentId)} warehouse={warehouse} user={user} onSaved={props.refresh} />}
       {!["orders", "count", "returns", "transfers", "cancellation"].includes(
         route,
