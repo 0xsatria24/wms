@@ -37,7 +37,7 @@ import {
   useCataloguePageSize,
 } from "./ui.tsx";
 
-const stockColumnWidths = [23, 11, 9, 14, 10, 11, 7, 15];
+const stockColumnWidths = [20, 11, 14, 14, 9, 10, 7, 15];
 
 export function Stock({
   data,
@@ -106,7 +106,7 @@ export function Stock({
       server,
     ],
   );
-  const result = server ? { ...localResult, ...server, items: localResult.items } : localResult;
+  const result = server ? { ...localResult, ...server, items: [...localResult.items].sort((a, b) => server.ids.indexOf(a.sku) - server.ids.indexOf(b.sku)) } : localResult;
   const bulk = useBulkSelection({ rows: result.items, scope: JSON.stringify([user.id, user.role, warehouse, search, loc, condition, stockStatus, sort, descending, page, pageSize]), key: row => row.key, label: row => `${row.product.name} · ${row.sku}`, disabled: !!setCatalogueQuery && !server });
   useEffect(
     () => setPage(1),

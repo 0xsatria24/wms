@@ -148,6 +148,11 @@ export interface WorkflowDocument {
   createdAt: string | null;
   updatedAt: string | null;
   completedAt: string | null;
+  documentDate: string | null;
+  scheduledDate: string | null;
+  startedAt: string | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
   allocations: { position: string; location: string; qty: string }[];
 }
 export interface WorkflowData {

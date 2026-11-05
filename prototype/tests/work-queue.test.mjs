@@ -7,6 +7,17 @@ const products = [
   { sku: "SKU-A", name: "Product A" },
   { sku: "SKU-B", name: "Product B" },
 ];
+
+test("outbound Ready queues use stage quantities rather than canonical released status", () => {
+  const orders = [{ id: "READY", sku: "SKU-A", warehouse: "Main", qty: 10, shipped: 0, status: "released", allocations: {"A-01": 5, Staging: 3} }];
+  const positions = [{ sku: "SKU-A", warehouse: "Main", location: "A-01", qty: 20, reserved: 8, condition: "good", hold: "", frozen: false, pickable: true }];
+  for (const [kind, remaining] of [["reservations", 2], ["picking", 5], ["shipping", 3]]) {
+    const rows = workQueueRows(orders, products, kind, positions);
+    assert.equal(rows[0].remaining, remaining);
+    assert.equal(rows[0].status, "ready");
+  }
+  assert.equal(workQueueRows(orders, products, "reservations", [])[0].status, "waiting");
+});
 const options = {
   query: "",
   status: "",

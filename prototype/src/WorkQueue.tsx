@@ -75,8 +75,8 @@ export function WorkQueue({
   const [to, setTo] = useState("");
   const [pageSize, setPageSize] = useCataloguePageSize();
   const rows = useMemo(
-    () => workQueueRows(items, products, kind),
-    [items, products, kind],
+    () => workQueueRows(items, products, kind, data?.positions || []),
+    [items, products, kind, data?.positions],
   );
   const server = useServerCatalogue(data || {}, setCatalogueQuery, queryForDocumentDraft({ view: kind, query: deferredQuery, status, sku, sort, page, pageSize, from, to }, { document: focusDocument, newOrderSku: lookupSku }));
   const localResult = useMemo(

@@ -458,6 +458,7 @@ export function Access({ data, setData, persistData = setData, user, flash, crea
 
 export function Master({ data, setData, persistData = setData, user, flash, deleteItem, setCatalogueQuery, warehouse, editRecord, refresh, openWorkflow, locale = "en" }) {
   const t = useText();
+  const [barcodeMode, setBarcodeMode] = useState("auto");
   const [tab, setTab] = useState("items");
   const [sku, setSku] = useState("SKU-A");
   const selected = data.products.find((p) => p.sku === sku);
@@ -471,6 +472,7 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [pendingStockNavigation, setPendingStockNavigation] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedItem, setSavedItem] = useState(null);
   const [query, setQuery] = useState("");
@@ -532,10 +534,13 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
   const save = async (e) => {
     e.preventDefault();
     setError("");
+    const itemPayload = { ...form, factor: Number(form.factor), version: form.version || 0,
+      generateBarcode: !selected && barcodeMode === "auto",
+      barcode: !selected && barcodeMode === "auto" ? "" : form.barcode };
     if (
       data.products.some(
         (p) =>
-          p.sku !== sku && (p.sku === form.sku || p.barcode === form.barcode),
+          p.sku !== sku && (p.sku === form.sku || (!!itemPayload.barcode && p.barcode === itemPayload.barcode)),
       )
     ) {
       setError(
@@ -560,9 +565,9 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
       ...s,
       products: s.products.some((p) => p.sku === sku)
         ? s.products.map((p) =>
-            p.sku === sku ? { ...form, factor: Number(form.factor) } : p,
+            p.sku === sku ? itemPayload : p,
           )
-        : [...s.products, { ...form, factor: Number(form.factor) }],
+        : [...s.products, itemPayload],
       audit: [
         {
           id: crypto.randomUUID(),
@@ -635,6 +640,7 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
                 primary
                 onClick={() => {
                   setSku("");
+                  setBarcodeMode("auto");
                   setForm({
                     sku: "",
                     name: "",
@@ -764,6 +770,7 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
                         setSku(p.sku);
                         const { id, ...item } = p;
                         setForm(item);
+                        setBarcodeMode("existing");
                         setEditorOpen(true);
                       }}
                     >
@@ -800,6 +807,7 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
                           setSku(p.sku);
                           const { id, ...item } = p;
                           setForm(item);
+                          setBarcodeMode("existing");
                           setEditorOpen(true);
                         }}
                       >
@@ -952,15 +960,26 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
                       value={form.weight}
                       onChange={change("weight")}
                     />
-                    <Field
-                      label={t(
-                        "Barcode value (internal namespace)",
-                        "Nilai barcode (namespace internal)",
-                      )}
+                    {!selected && <Field label={t("Barcode source", "Sumber barcode")}>
+                      <select value={barcodeMode} onChange={e => setBarcodeMode(e.target.value)}>
+                        <option value="auto">{t("Generate automatically", "Buat otomatis")}</option>
+                        <option value="scan">{t("Scan existing barcode", "Scan barcode yang sudah ada")}</option>
+                        <option value="manual">{t("Manual entry (fallback)", "Input manual (cadangan)")}</option>
+                      </select>
+                    </Field>}
+                    {!selected && barcodeMode === "auto" ? <p>{t("An internal barcode will be generated when you save. Download its label from the item catalogue.", "Barcode internal dibuat saat disimpan. Unduh labelnya dari katalog barang.")}</p> : <Field
+                      key={barcodeMode}
+                      label={barcodeMode === "scan" ? t("Scan barcode", "Scan barcode") : t("Barcode", "Barcode")}
                       value={form.barcode}
                       required
+                      readOnly={!!selected && barcodeMode === "existing"}
+                      autoFocus={barcodeMode === "scan"}
+                      autoComplete="off"
+                      hint={barcodeMode === "scan" ? t("Scan with a USB/Bluetooth scanner. Enter completes the scan without saving the form.", "Scan menggunakan scanner USB/Bluetooth. Enter menyelesaikan scan tanpa menyimpan form.") : undefined}
+                      onKeyDown={e => { if (e.key === "Enter") e.preventDefault(); }}
                       onChange={change("barcode")}
-                    />
+                    />}
+                    {selected && barcodeMode === "existing" && <Button onClick={() => setBarcodeMode("scan")}>{t("Replace barcode", "Ganti barcode")}</Button>}
                   </div>
                   {selected && selected.barcode !== form.barcode && (
                     <Field
@@ -1007,7 +1026,12 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
                         "Kelola gambar di panel detail stok.",
                       )}
                     </p>
-                    <a href="#stock">
+                    <a href="#stock" aria-disabled={saving || deleteBusy} onClick={event => {
+                      event.preventDefault();
+                      if (saving || deleteBusy) return;
+                      if (hasChanges) { setPendingStockNavigation(true); setDiscarding(true); }
+                      else window.location.hash = "stock";
+                    }}>
                       {t("Open stock detail", "Buka detail stok")}
                     </a>
                   </div>
@@ -1105,10 +1129,10 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
             "Discard unsaved changes?",
             "Batalkan perubahan yang belum disimpan?",
           )}
-          onClose={() => setDiscarding(false)}
+          onClose={() => { setDiscarding(false); setPendingStockNavigation(false); }}
           footer={
             <>
-              <Button onClick={() => setDiscarding(false)}>
+              <Button onClick={() => { setDiscarding(false); setPendingStockNavigation(false); }}>
                 {t("Keep editing", "Lanjutkan mengubah")}
               </Button>
               <Button
@@ -1117,6 +1141,8 @@ export function Master({ data, setData, persistData = setData, user, flash, dele
                   setDiscarding(false);
                   setEditorOpen(false);
                   setForm(selected);
+                  if (pendingStockNavigation) window.location.hash = "stock";
+                  setPendingStockNavigation(false);
                 }}
               >
                 {t("Discard changes", "Batalkan perubahan")}

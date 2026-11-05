@@ -82,6 +82,10 @@ public sealed partial class HttpApiTests
         var snapshot = await Read(await admin.GetAsync(SnapshotPath + "?view=orders&from=2026-11-02&to=2026-11-02&focusDocument=" + id));
         var dates = snapshot.GetProperty("documentDates").GetProperty(id);
         Assert.Equal("2026-11-05", dates.GetProperty("scheduledDate").GetString());
+        var workflow = await Read(await admin.GetAsync("/api/workspaces/Main%20Warehouse/workflow?document=" + id));
+        var workflowDocument = workflow.GetProperty("documents").EnumerateArray().Single(d => d.GetProperty("id").GetString() == id);
+        Assert.Equal("2026-11-02", workflowDocument.GetProperty("documentDate").GetString());
+        Assert.Equal("2026-11-05", workflowDocument.GetProperty("scheduledDate").GetString());
         Assert.NotEqual(JsonValueKind.Null, dates.GetProperty("updatedAt").ValueKind);
         Assert.Contains(snapshot.GetProperty("catalogue").GetProperty("ids").EnumerateArray(), row => row.GetString() == id);
         var empty = await Read(await admin.GetAsync(SnapshotPath + "?view=orders&from=1999-01-01&to=1999-01-01"));

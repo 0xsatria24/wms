@@ -62,6 +62,7 @@ export function StockWorkspace(props: any) {
   const [page, setPage] = useState(1);
   const [catalogue, setCatalogue] = useState<WorkflowData | null>(null);
   const [catalogueBusy, setCatalogueBusy] = useState(false);
+  const [catalogueError, setCatalogueError] = useState("");
   const [generation, reload] = useState(0);
   const [newItem, setNewItem] = useState<any>(null);
   const [catalogueTab, setCatalogueTab] = useState("manual");
@@ -255,11 +256,14 @@ export function StockWorkspace(props: any) {
     user.id,
     user.role,
     generation,
+    props.data.asOf,
   ]);
   useEffect(() => {
     if (route === "stock") return;
     const controller = new AbortController();
     setCatalogueBusy(true);
+    setCatalogueError("");
+    setCatalogue(null);
     const timer = setTimeout(() => {
       workflowRead(
         warehouse,
@@ -271,7 +275,7 @@ export function StockWorkspace(props: any) {
         })
         .catch((e) => {
           if (!controller.signal.aborted)
-            setError(errorText(e.code || e.message, t));
+            setCatalogueError(errorText(e.code || e.message, t));
         })
         .finally(() => {
           if (!controller.signal.aborted) setCatalogueBusy(false);
@@ -281,7 +285,7 @@ export function StockWorkspace(props: any) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [route, warehouse, user.id, user.role, search, status, page, generation]);
+  }, [route, warehouse, user.id, user.role, search, status, page, generation, props.data.asOf]);
   const patch = (value: any) => {
     setForm((old: any) => ({ ...old, ...value }));
     setDirty(true);
@@ -835,6 +839,7 @@ export function StockWorkspace(props: any) {
   return (
     <div className={`stock-workspace ${context ? "has-workflow-panel" : ""}`}>
       <div className="workflow-main" inert={narrow && !!context}>
+        {route !== "stock" && catalogueError && <Notice kind="error">{catalogueError}<Button disabled={catalogueBusy} onClick={() => reload(n => n + 1)}>{t("Try loading again", "Coba muat lagi")}</Button></Notice>}
         {route === "stock" ? (
           <Stock
             {...props}
@@ -1090,7 +1095,7 @@ export function StockWorkspace(props: any) {
                       ))}
                     </tbody>
                   </table>
-                  {!rows.length && !catalogueBusy && (
+                  {!rows.length && !catalogueBusy && !catalogueError && (
                     <div className="workflow-empty">
                       {t(
                         "No documents match. Start a receipt or change the search.",
@@ -1188,8 +1193,9 @@ export function StockWorkspace(props: any) {
               <X size={20} />
             </Button>
           </header>
+          <div className="workflow-body">
           <fieldset
-            className="workflow-body"
+            className="workflow-fields"
             disabled={busy}
             aria-busy={loading || busy}
           >
@@ -2392,6 +2398,7 @@ export function StockWorkspace(props: any) {
               </>
             )}
           </fieldset>
+          </div>
           {!newItem && !draftList && !completedDraft && (
             <footer className="workflow-footer">
               {review ? (

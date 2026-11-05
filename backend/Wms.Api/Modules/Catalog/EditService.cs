@@ -63,16 +63,29 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
             Supervisor(actor);
             Require(p.Text("reason").Length <= 2000 && p.Text("barcode").Length <= 200 && p.Text("sku").Length <= 200, "required", 400);
             var sku = p.Text("sku");
-            Require(!string.IsNullOrWhiteSpace(sku) && !string.IsNullOrWhiteSpace(p.Text("name")) && !string.IsNullOrWhiteSpace(p.Text("barcode")) && !string.IsNullOrWhiteSpace(p.Text("unit")), "required", 400);
-            Require(System.Text.RegularExpressions.Regex.IsMatch(p.Text("barcode"), "^[\\x20-\\x7E]+$"), "barcode-format", 400);
+            var generateBarcode = p.TryGetProperty("generateBarcode", out var generate) && generate.ValueKind == JsonValueKind.True;
+            Require(!string.IsNullOrWhiteSpace(sku) && !string.IsNullOrWhiteSpace(p.Text("name")) && (generateBarcode || !string.IsNullOrWhiteSpace(p.Text("barcode"))) && !string.IsNullOrWhiteSpace(p.Text("unit")), "required", 400);
             var factor = p.Quantity("factor");
             var existing = (await db.Items.FromSqlInterpolated($"SELECT * FROM \"Items\" WHERE \"CompanyId\" = 'demo' AND \"Sku\" = {sku} FOR UPDATE").ToListAsync(ct)).SingleOrDefault();
-            Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Sku != sku && i.Barcode == p.Text("barcode"), ct), "duplicate", 409);
-            var barcodeCode = p.Text("barcode");
+            if (generateBarcode && existing is not null)
+            {
+                // A lost create response may be retried, but must never become an update.
+                Require(p.TryGetProperty("version", out var createVersion) && createVersion.TryGetInt64(out var version) && version == 0
+                    && existing.Version == 1 && existing.Barcode.StartsWith("IW-", StringComparison.Ordinal)
+                    && existing.Name == p.Text("name") && existing.Unit == p.Text("unit") && existing.Category == p.Text("category")
+                    && existing.Dimensions == p.Text("dimensions") && existing.Weight == p.Text("weight") && existing.ConversionFactor == factor
+                    && existing.Active == (p.TryGetProperty("active", out var a) && a.ValueKind == JsonValueKind.True)
+                    && existing.Image == (p.TryGetProperty("image", out var im) && im.ValueKind == JsonValueKind.String ? im.GetString() : null), "conflict");
+                await transaction.CommitAsync(ct);
+                return;
+            }
+            var barcodeCode = generateBarcode ? "IW-" + ReferenceId.New() : p.Text("barcode");
+            Require(System.Text.RegularExpressions.Regex.IsMatch(barcodeCode, "^[\\x20-\\x7E]+$"), "barcode-format", 400);
+            Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Sku != sku && i.Barcode == barcodeCode, ct), "duplicate", 409);
             Require(!await db.Items.AnyAsync(i => i.CompanyId == "demo" && i.Sku != sku && i.Active && (i.Sku == barcodeCode || i.Barcode == sku), ct), "ambiguous-item");
             if (existing is null)
             {
-                existing = new Item { Id = $"demo|{sku}", Sku = sku, Name = p.Text("name"), Barcode = p.Text("barcode"), Unit = p.Text("unit") };
+                existing = new Item { Id = $"demo|{sku}", Sku = sku, Name = p.Text("name"), Barcode = barcodeCode, Unit = p.Text("unit") };
                 db.Items.Add(existing);
             }
             else
@@ -104,7 +117,7 @@ public sealed class EditService(WmsDb db, IHostEnvironment environment)
                 Require(bytes.Length > 12 && ((bytes[0] == 0xFF && bytes[1] == 0xD8) || (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) || (System.Text.Encoding.ASCII.GetString(bytes, 0, 4) == "RIFF" && System.Text.Encoding.ASCII.GetString(bytes, 8, 4) == "WEBP")), "image", 400);
             }
             existing.Name = p.Text("name");
-            existing.Barcode = p.Text("barcode");
+            existing.Barcode = barcodeCode;
             existing.Category = p.Text("category");
             existing.Dimensions = p.Text("dimensions");
             existing.Weight = p.Text("weight");

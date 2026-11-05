@@ -31,6 +31,7 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
         var blindScopes = actor.Role == "operator"
             ? (await db.Documents.Where(d => d.Kind == "count" && d.Status != "closed" && d.WarehouseId == actor.WarehouseId).ToListAsync(ct)).Select(d => (d.ItemId, d.LocationId)).ToHashSet()
             : [];
+        var hiddenPayload = JsonSerializer.SerializeToElement(new { });
         var docIds = docs.Select(d => d.Id).ToArray();
         var allocations = await db.Allocations.Where(a => docIds.Contains(a.OrderId)).ToListAsync(ct);
         var boundedRecords = db.SupportingRecords.FromSqlInterpolated($"SELECT * FROM \"SupportingRecords\" WHERE octet_length(\"PayloadJson\"::text) <= {SupportingPayload.MaxBytes}")
@@ -91,7 +92,7 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
         if (input.Sku != "") ledgerQuery = ledgerQuery.Where(x => x.i.Sku == input.Sku);
         if (input.Location != "") ledgerQuery = ledgerQuery.Where(x => x.l.Code == input.Location);
         var ledgerSearch = input.Query.Trim().ToLowerInvariant();
-        if (ledgerSearch != "") ledgerQuery = ledgerQuery.Where(x => (x.m.Source + " " + x.m.Kind + " " + x.m.Id + " " + x.e.Id.ToString()).ToLower().Contains(ledgerSearch));
+        if (input.View != "tracking" && ledgerSearch != "") ledgerQuery = ledgerQuery.Where(x => (x.m.Source + " " + x.m.Kind + " " + x.m.Id + " " + x.e.Id.ToString()).ToLower().Contains(ledgerSearch));
         if (start.HasValue) ledgerQuery = ledgerQuery.Where(x => x.m.PostedAt >= start.Value);
         if (end.HasValue) ledgerQuery = ledgerQuery.Where(x => x.m.PostedAt < end.Value);
         var includeLedger = input.View is "movements" or "tracking" or "overview";
@@ -173,8 +174,8 @@ public sealed class SnapshotQuery(WmsDb db, IConfiguration? configuration = null
             }),
             ledger = entries.Select(x => new { id = x.e.Id.ToString(), transaction = x.m.Id, sku = x.i.Sku, warehouse = Wh(actor.WarehouseId), location = x.l.Code, qty = Number(x.e.QuantityDelta), unit = x.e.Unit, kind = x.m.Kind, source = x.m.Source, user = x.m.Actor, occurred = x.m.OccurredAt, posted = x.m.PostedAt }),
             ledgerSummary = new { total = ledgerTotal, quantities = ledgerQuantities.Select(x => new { x.unit, qty = Number(x.qty) }) },
-            events = events.Select(e => new { id = e.Id.ToString(), source = e.AggregateId, type = e.Kind, warehouse = Wh(e.WarehouseId), wms = "confirmed", transport = e.TransportStatus, business = e.BusinessStatus, attempts = e.Attempts, createdAt = e.CreatedAt, nextAttemptAt = e.NextAttemptAt, payload = JsonSerializer.Deserialize<JsonElement>(e.PayloadJson) }),
-            audit = audit.Select(a => new { id = a.TransactionId, type = a.Action, user = a.PrincipalId, warehouse = Wh(a.WarehouseId), payload = JsonSerializer.Deserialize<JsonElement>(a.DetailJson), stamp = a.PostedAt }),
+            events = events.Select(e => new { id = e.Id.ToString(), source = e.AggregateId, type = e.Kind, warehouse = Wh(e.WarehouseId), wms = "confirmed", transport = e.TransportStatus, business = e.BusinessStatus, attempts = e.Attempts, createdAt = e.CreatedAt, nextAttemptAt = e.NextAttemptAt, payload = blindScopes.Count > 0 ? hiddenPayload : JsonSerializer.Deserialize<JsonElement>(e.PayloadJson) }),
+            audit = audit.Select(a => new { id = a.TransactionId, type = a.Action, user = a.PrincipalId, warehouse = Wh(a.WarehouseId), payload = blindScopes.Count > 0 ? hiddenPayload : JsonSerializer.Deserialize<JsonElement>(a.DetailJson), stamp = a.PostedAt }),
             users = userDtos,
             userPage = new { page = userPage, pages = userPages, total = userTotal, pendingTotal, pageSize = 25 },
             supportingPage = new { page = supportingPage, pages = supportingPages, total = supportingTotal, pageSize = supportingSize },

@@ -138,6 +138,7 @@ export function Operations(props) {
       className="stack"
       onSubmit={(e) => {
         e.preventDefault();
+        if (disabled || user.role === "viewer") return;
         onSubmit();
       }}
     >
@@ -1474,7 +1475,8 @@ export function Operations(props) {
     activeDocumentId = task?.id;
     const reviewer =
       canManage && value("view", "count") === "review";
-    const q = Number(quantity(String(value("qty", "")),true));
+    const parsedCount = quantity(String(value("qty", "")), true);
+    const q = parsedCount === null ? null : Number(parsedCount);
     content = (
       <Panel title={t("Count workspace", "Ruang kerja opname")}>
         {canManage && (
@@ -1544,12 +1546,13 @@ export function Operations(props) {
                 [t("Status", "Status"), task.status],
               ]}
             />
-            <Notice kind="warning">
+            {task.status !== "closed" && <Notice kind="warning">
               {t(
                 "This location remains frozen until an authorized release. Closing the browser does not release it.",
                 "Lokasi tetap dibekukan sampai dibuka oleh pengguna berwenang. Menutup browser tidak membukanya.",
               )}
-            </Notice>
+            </Notice>}
+            {task.status === "closed" && canManage && <Button onClick={() => patch({ task: undefined, qty: undefined, view: "count" })}>{t("Start another count", "Mulai opname baru")}</Button>}
             {reviewer ? (
               <>
                 <Summary
@@ -1652,6 +1655,7 @@ export function Operations(props) {
                     "",
                     { type: "number", min: 0, step: 0.000001, required: true },
                   )}
+                  {value("qty", "") !== "" && parsedCount === null && <Notice kind="error">{t("Enter zero or a decimal with up to six decimal places.", "Masukkan nol atau angka desimal dengan maksimal enam angka di belakang koma.")}</Notice>}
                   <Notice>
                     {t(
                       "Enter your physical count. The expected balance is hidden. Submission does not adjust stock.",
@@ -1665,14 +1669,14 @@ export function Operations(props) {
                     [t("Counted", "Terhitung"), `${q} ${t("units", "unit")}`],
                   ]),
                 t("Submit count", "Kirim hasil hitung"),
+                parsedCount === null,
               )
             ) : (
-              <Notice>
-                {t(
-                  "Count submitted. An authorized reviewer handles the next step.",
-                  "Hasil hitung dikirim. Peninjau berwenang menangani langkah berikutnya.",
-                )}
-              </Notice>
+              <>
+                <Notice>
+                  {task.status === "closed" ? t("Count completed. The location freeze has been released.", "Opname selesai. Pembekuan lokasi sudah dibuka.") : t("Count submitted. An authorized reviewer handles the next step.", "Hasil hitung dikirim. Peninjau berwenang menangani langkah berikutnya.")}
+                </Notice>
+              </>
             )}
           </>
         )}

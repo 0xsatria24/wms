@@ -33,6 +33,12 @@ const options = {
   pageSize: 10,
 };
 
+test("Item sorting follows the item name before its SKU", () => {
+  const names = [{sku: "Z", name: "Alpha", unit: "units"}, {sku: "A", name: "Zulu", unit: "units"}];
+  const rows = [position({sku: "Z"}), position({sku: "A"})];
+  assert.deepEqual(stockItemPage(rows, names, options).items.map(i => i.sku), ["Z", "A"]);
+});
+
 test("item time uses only the latest movement of matching positions and never the refresh time", () => {
   const positions = [
     position({ lastMovementAt: "2026-11-02T01:00:00Z" }),

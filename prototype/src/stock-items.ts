@@ -155,7 +155,7 @@ export function stockItemPage(
             : 0)
         : options.sort === "location"
           ? order.compare(a.locations[0], b.locations[0])
-          : order.compare(a.sku, b.sku);
+          : order.compare(a.product.name, b.product.name);
     return (
       (compared || order.compare(a.sku, b.sku)) * (options.descending ? -1 : 1)
     );

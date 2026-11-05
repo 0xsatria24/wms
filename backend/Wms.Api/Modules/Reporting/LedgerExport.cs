@@ -39,8 +39,7 @@ public sealed class LedgerExport(WmsDb db)
         return [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(content.ToString())];
         static string Cell(string value)
         {
-            if (value.Length > 0 && "=+-@".Contains(value[0]))
-                value = "'" + value;
+            value = ExportFileWriter.SafeText(value);
             return "\"" + value.Replace("\"", "\"\"") + "\"";
         }
     }

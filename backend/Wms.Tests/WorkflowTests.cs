@@ -235,4 +235,21 @@ public sealed class WorkflowTests(PostgresFixture postgres)
         var error = await Assert.ThrowsAsync<BusinessException>(() => new Wms.Modules.Reporting.LedgerExport(denied).Csv(Admin, "SKU-A", "A-01", null, CancellationToken.None));
         Assert.Equal(403, error.Status);
     }
+
+    [Fact]
+    public async Task LegacyLedgerEscapesControlPrefixedFormulasWithoutChangingNumericDeltas()
+    {
+        var options = await postgres.Database();
+        await using var db = new WmsDb(options);
+        foreach (var prefix in new[] { " \t=1+1", "\r+1+1", "\n@SUM(1)", "\t-1+1" })
+        {
+            var id = Guid.NewGuid().ToString();
+            db.Movements.Add(new StockMovement { Id = id, WarehouseId = "main", Kind = "opening", Source = prefix, Actor = "admin", OccurredAt = DateTimeOffset.UtcNow, PostedAt = DateTimeOffset.UtcNow });
+            db.Entries.Add(new StockEntry { MovementId = id, PositionId = "POS-A", QuantityDelta = -2.5m });
+        }
+        await db.SaveChangesAsync();
+        var csv = System.Text.Encoding.UTF8.GetString(await new Wms.Modules.Reporting.LedgerExport(db).Csv(Admin, "SKU-A", "A-01", null, CancellationToken.None));
+        foreach (var prefix in new[] { " \t=1+1", "\r+1+1", "\n@SUM(1)", "\t-1+1" }) Assert.Contains("\"'" + prefix + "\"", csv);
+        Assert.Contains(",-2.5,", csv);
+    }
 }

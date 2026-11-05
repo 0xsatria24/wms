@@ -105,6 +105,7 @@ function Application({ locale, setLocale }) {
   const [notice, setNotice] = useState(null);
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [viewRefreshing, setViewRefreshing] = useState(false);
   const [drafts, setDrafts] = useState({});
   const workflowDirty = useRef(false);
   const [workspaceContext, setWorkspaceContext] = useState<any>(null);
@@ -413,7 +414,7 @@ function Application({ locale, setLocale }) {
           [draftKey]: {
             document: review.request.payload.document,
             order: review.request.payload.order,
-            task: review.request.payload.task,
+            task: review.request.type === "unfreeze" && posted.message === "recorded" ? undefined : review.request.payload.task,
             mode: all[draftKey]?.mode,
             view: all[draftKey]?.view,
           },
@@ -825,8 +826,10 @@ function Application({ locale, setLocale }) {
               )}
               <button
                 className="text-button"
+                disabled={viewRefreshing}
+                aria-busy={viewRefreshing}
                 onClick={async () => {
-                  setLoading(true);
+                  setViewRefreshing(true);
                   try {
                     await refresh();
                     flash(
@@ -841,11 +844,11 @@ function Application({ locale, setLocale }) {
                       message: errorText(error.message, t),
                     });
                   } finally {
-                    setLoading(false);
+                    setViewRefreshing(false);
                   }
                 }}
               >
-                {t("Refresh view", "Muat ulang tampilan")}
+                {viewRefreshing ? t("Refreshing…", "Memuat ulang…") : t("Refresh view", "Muat ulang tampilan")}
               </button>
             </footer>
           </main>

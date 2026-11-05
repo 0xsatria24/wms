@@ -36,7 +36,7 @@ public sealed class WorkspaceWindow
         var selectedInFilter = true;
         string[] statuses = [];
         string[] categories = [];
-        if (input.View is "stock" or "master")
+        if (input.View is "stock" or "master" or "tracking")
         {
             var filtered = items;
             if (input.View == "stock")
@@ -71,7 +71,8 @@ public sealed class WorkspaceWindow
                 window.ItemIds = await ranked.Skip((page - 1) * size).Take(size).Select(x => x.Item.Id).ToArrayAsync(ct);
             }
             else window.ItemIds = await sorted.Skip((page - 1) * size).Take(size).Select(i => i.Id).ToArrayAsync(ct);
-            ids = await items.Where(i => window.ItemIds.Contains(i.Id)).Select(i => i.Sku).ToArrayAsync(ct);
+            var pageSkus = await items.Where(i => window.ItemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, i => i.Sku, ct);
+            ids = window.ItemIds.Select(id => pageSkus[id]).ToArray();
         }
         else
         {

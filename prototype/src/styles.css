@@ -987,9 +987,17 @@ td .button {
 }
 .stock-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 20px;
   align-items: flex-end;
+}
+.stock-toolbar > .search {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.stock-toolbar > .button {
+  flex-shrink: 0;
 }
 .search {
   flex: 1;
@@ -1057,9 +1065,10 @@ td .button {
   max-width: 100%;
 }
 .stock-group-table {
-  min-width: 920px;
+  min-width: 1060px;
   table-layout: fixed;
 }
+.stock-group-table .tag, .stock-detail-table .tag { max-width: 100%; white-space: normal; }
 .stock-group-table .numeric {
   text-align: right;
   font-variant-numeric: tabular-nums lining-nums;
@@ -1766,11 +1775,6 @@ dialog::backdrop {
     align-self: start;
     display: block;
   }
-  .stock-toolbar {
-    max-width: 480px;
-    margin-left: auto;
-    margin-top: -2px;
-  }
   .analysis-panel .summary {
     margin-bottom: 16px;
   }
@@ -1785,13 +1789,6 @@ dialog::backdrop {
   }
 }
 @media (min-width: 1280px) {
-  .page-heading:has(+ .stock-toolbar) > div {
-    max-width: calc(100% - 500px);
-  }
-  .stock-toolbar {
-    margin-top: -88px;
-    margin-bottom: 24px;
-  }
   .stock-grid {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   }
@@ -1818,8 +1815,7 @@ dialog::backdrop {
     width: 80px;
     height: 80px;
   }
-  .stock-table-panel td:last-child,
-  .stock-table-panel .tag {
+  .stock-table-panel td:last-child {
     white-space: nowrap;
   }
 }
@@ -2165,20 +2161,20 @@ h3 {
 .workflow-main { min-width: 0; }
 .workflow-main .button[hidden] { display: none; }
 .workflow-panel { position: sticky; top: 16px; display: flex; flex-direction: column; max-height: calc(100dvh - var(--workflow-top, 180px) - 16px); min-width: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); overflow: hidden; }
-.workflow-panel > header { display: flex; justify-content: space-between; align-items: start; gap: 12px; padding: 20px; border-bottom: 1px solid var(--divider); }
+.workflow-panel > header { display: flex; flex-shrink: 0; justify-content: space-between; align-items: start; gap: 12px; padding: 20px; border-bottom: 1px solid var(--divider); }
 .workflow-panel h2 { font-size: 1.4rem; margin: 4px 0; line-height: 1.2; }
 .workflow-panel h3 { font-size: 1.05rem; margin: 0 0 12px; }
 .workflow-panel p { margin: 4px 0 12px; }
 .workflow-panel header p { margin: 4px 0 0; color: var(--muted); }
 .workflow-eyebrow { font-size: .875rem; color: var(--muted); }
-.workflow-body { border: 0; margin: 0; padding: 20px; overflow: auto; min-height: 0; min-inline-size: 0; overscroll-behavior: contain; }
-.workflow-body > .field, .workflow-body > section, .workflow-body > details { margin-bottom: 16px; }
+.workflow-body { padding: 20px; overflow: auto; min-height: 0; min-inline-size: 0; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.workflow-fields > .field, .workflow-fields > section, .workflow-fields > details { margin-bottom: 16px; }
 .workflow-body .field { min-width: 0; }
 .workflow-body input, .workflow-body select { width: 100%; min-width: 0; }
 .workflow-panel .field input, .workflow-panel .field select { border-color: var(--border); }
 .workflow-body input::placeholder { color: var(--muted); opacity: 1; }
 .workflow-body .check input { width: auto; }
-.workflow-footer { padding: 16px 20px; border-top: 1px solid var(--divider); display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; background: var(--surface); }
+.workflow-footer { padding: 16px 20px; border-top: 1px solid var(--divider); display: flex; flex-shrink: 0; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; background: var(--surface); }
 .workflow-footer .button { flex: 1 1 auto; }
 .workflow-draft-status { flex: 1 1 100%; color: var(--muted); font-size: .875rem; }
 .workflow-reference, .workflow-panel dd { overflow-wrap: anywhere; }

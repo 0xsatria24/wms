@@ -1,3 +1,5 @@
+import { available } from "./fixtures.ts";
+
 export interface WorkQueueItem {
   id: string;
   sku: string;
@@ -10,6 +12,9 @@ export interface WorkQueueItem {
   status?: string;
   documentDate?: string;
   scheduledDate?: string;
+  warehouse?: string;
+  allocations?: Record<string, number | string>;
+  cancelled?: boolean;
 }
 
 export function selectDraftDocument<T extends { id: string } = any>(rows: T[], savedId?: string, preferred?: T): T | undefined {
@@ -39,9 +44,19 @@ export function workQueueRows(
   items: WorkQueueItem[],
   products: { sku: string; name: string }[],
   kind: string,
+  positions: any[] = [],
 ): WorkQueueRow[] {
   const names = new Map(products.map((product) => [product.sku, product.name]));
-  return items.map((item) => {
+  const stagedQueue = ["reservations", "picking", "shipping"].includes(kind);
+  return items.filter(item => !stagedQueue || item.status === "released" && !item.cancelled).map((item) => {
+    if (stagedQueue) {
+      const allocations = Object.entries(item.allocations || {});
+      const allocated = allocations.reduce((sum, [, qty]) => sum + Number(qty), 0);
+      const staged = Number(item.allocations?.Staging || 0);
+      const remaining = kind === "reservations" ? Math.max(0, (item.qty || 0) - (item.shipped || 0) - allocated) : kind === "picking" ? allocated - staged : staged;
+      const ready = remaining > 0 && (kind !== "reservations" || positions.some(p => p.sku === item.sku && p.warehouse === item.warehouse && available(p) > 0));
+      return { ...item, productName: names.get(item.sku) || item.sku, remaining, status: ready ? "ready" : "waiting" };
+    }
     const remaining =
       item.remaining ?? Math.max(0, (item.qty ?? 0) - (item.shipped ?? 0));
     const status =

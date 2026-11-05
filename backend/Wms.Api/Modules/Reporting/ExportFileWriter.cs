@@ -24,7 +24,7 @@ public static class ExportFileWriter
         return [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(text.ToString().Replace("\r\n", "\n").Replace("\n", "\r\n"))];
     }
 
-    private static string SafeText(string value)
+    internal static string SafeText(string value)
     {
         var trimmed = value.TrimStart();
         return (trimmed.Length > 0 && "=+-@".Contains(trimmed[0])) || value.StartsWith('\t') || value.StartsWith('\r') || value.StartsWith('\n') ? "'" + value : value;

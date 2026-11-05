@@ -53,12 +53,41 @@ public sealed class SupportingWorkspaceTests(PostgresFixture postgres)
     {
         await using var db = new WmsDb(await postgres.Database());
         db.Documents.Add(new OperationalDocument { Id = "blind", Kind = "count", WarehouseId = "main", ItemId = "demo|SKU-A", LocationId = "main|A-01", Status = "counting" });
+        var payload = JsonSerializer.Serialize(new { document = "PO-1", Payload = new { lines = new[] { new { quantity = 333, expected = 333 } } } });
+        db.Audit.Add(new AuditRecord { TransactionId = "blind-payload", PrincipalId = "admin", WarehouseId = "main", Action = "opening", DetailJson = payload, PostedAt = DateTimeOffset.UtcNow });
+        db.Outbox.Add(new OutboxEvent { WarehouseId = "main", AggregateId = "blind-payload", Kind = "opening", PayloadJson = payload, CreatedAt = DateTimeOffset.UtcNow });
         await db.SaveChangesAsync();
         var result = await Read(db, new WorkspaceQuery(View: "movements", Sku: "SKU-A"), new("operator", "main", "operator"));
         Assert.Empty(result.GetProperty("ledger").EnumerateArray());
         Assert.Equal(0, result.GetProperty("ledgerPage").GetProperty("total").GetInt32());
         Assert.Equal(0, result.GetProperty("ledgerSummary").GetProperty("total").GetInt32());
         Assert.Empty(result.GetProperty("ledgerSummary").GetProperty("quantities").EnumerateArray());
+        foreach (var view in new[] { "count", "integration", "stock" })
+        {
+            var blind = await Read(db, new WorkspaceQuery(View: view), new("operator", "main", "operator"));
+            Assert.All(blind.GetProperty("audit").EnumerateArray(), a => Assert.Empty(a.GetProperty("payload").EnumerateObject()));
+            Assert.All(blind.GetProperty("events").EnumerateArray(), e => Assert.Empty(e.GetProperty("payload").EnumerateObject()));
+        }
+        var reviewer = await Read(db, new WorkspaceQuery(View: "integration"));
+        Assert.Contains("333", reviewer.GetProperty("events").GetRawText());
+        (await db.Documents.SingleAsync(d => d.Id == "blind")).Status = "closed";
+        await db.SaveChangesAsync();
+        var closed = await Read(db, new WorkspaceQuery(View: "integration"), new("operator", "main", "operator"));
+        Assert.Contains("333", closed.GetProperty("events").GetRawText());
+    }
+
+    [Fact]
+    public async Task CatalogueIdsKeepNameSortOrder()
+    {
+        await using var db = new WmsDb(await postgres.Database());
+        (await db.Items.SingleAsync(i => i.Sku == "SKU-A")).Name = "Zulu";
+        (await db.Items.SingleAsync(i => i.Sku == "SKU-B")).Name = "Alpha";
+        (await db.Items.SingleAsync(i => i.Sku == "SKU-C")).Name = "Middle";
+        await db.SaveChangesAsync();
+        var ascending = await Read(db, new WorkspaceQuery(View: "master", Sort: "item"));
+        Assert.Equal(new[] { "SKU-B", "SKU-C", "SKU-A" }, ascending.GetProperty("catalogue").GetProperty("ids").EnumerateArray().Select(i => i.GetString()));
+        var descending = await Read(db, new WorkspaceQuery(View: "master", Sort: "item", Descending: true));
+        Assert.Equal(new[] { "SKU-A", "SKU-C", "SKU-B" }, descending.GetProperty("catalogue").GetProperty("ids").EnumerateArray().Select(i => i.GetString()));
     }
 
     [Fact]

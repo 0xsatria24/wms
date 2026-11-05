@@ -93,6 +93,41 @@ public sealed class CatalogTests(PostgresFixture postgres)
         Assert.False(await verify.Audit.AnyAsync(record => record.Action == "delete-master"));
     }
 
+    [Fact]
+    public async Task AutomaticBarcodeIsStableOnRetryAndRejectsChangedCreate()
+    {
+        var options = await postgres.Database();
+        EditRequest Create(string name = "Auto item") => new("master", "Main Warehouse", JsonSerializer.SerializeToElement(new {
+            sku = "AUTO-ITEM", name, barcode = "", generateBarcode = true, unit = "units", factor = "1", active = true,
+            category = "General goods", dimensions = "", weight = "", version = 0
+        }));
+        async Task Apply(EditRequest request) { await using var db = new WmsDb(options); await new EditService(db, new DevelopmentEnvironment()).Apply(Admin, request, CancellationToken.None); }
+        await Apply(Create());
+        string barcode;
+        await using (var db = new WmsDb(options)) { barcode = (await db.Items.SingleAsync(i => i.Sku == "AUTO-ITEM")).Barcode; }
+        Assert.StartsWith("IW-", barcode);
+        await Apply(Create());
+        var error = await Assert.ThrowsAsync<BusinessException>(() => Apply(Create("Different item")));
+        Assert.Equal("conflict", error.Message);
+        await using var verify = new WmsDb(options);
+        var item = await verify.Items.SingleAsync(i => i.Sku == "AUTO-ITEM");
+        Assert.Equal(barcode, item.Barcode); Assert.Equal(1, item.Version);
+        Assert.Empty(await verify.Positions.Where(p => p.ItemId == item.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task ScannedBarcodePreservesZerosAndRejectsDuplicates()
+    {
+        var options = await postgres.Database();
+        async Task Apply(string sku, string barcode) { await using var db = new WmsDb(options); await new EditService(db, new DevelopmentEnvironment()).Apply(Admin,
+            new("master", "Main Warehouse", JsonSerializer.SerializeToElement(new {sku, name = "Scanned item", barcode, unit = "units", factor = "1", active = true, version = 0})), CancellationToken.None); }
+        await Apply("SCAN-ITEM", "000123");
+        await using var verify = new WmsDb(options);
+        Assert.Equal("000123", (await verify.Items.SingleAsync(i => i.Sku == "SCAN-ITEM")).Barcode);
+        await Assert.ThrowsAsync<BusinessException>(() => Apply("OTHER-ITEM", "000123"));
+        await Assert.ThrowsAsync<BusinessException>(() => Apply("000123", "OTHER-CODE"));
+    }
+
     private sealed class DevelopmentEnvironment : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = Environments.Development;
